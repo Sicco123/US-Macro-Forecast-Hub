@@ -289,7 +289,9 @@ def score_all() -> pd.DataFrame:
     nominal_coverage = {"Coverage_50": 0.50, "Coverage_95": 0.95}
 
     def _rank_group(g):
-        metric = g["metric"].iloc[0]
+        # "metric" is a groupby key so it's not in the DataFrame columns;
+        # access it via the group name tuple instead (last element of rank_group).
+        metric = g.name[-1] if isinstance(g.name, tuple) else g.name
         if metric in nominal_coverage:
             # Rank by absolute deviation from nominal coverage level
             deviation = (g["value_absolute"] - nominal_coverage[metric]).abs()

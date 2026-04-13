@@ -23,7 +23,7 @@ warnings.filterwarnings("ignore")
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
 TARGET_DATA_PATH = HUB_ROOT / "target-data" / "latest-target_values.csv"
-OUTPUT_DIR = HUB_ROOT / "model-output" / "SBE_EDS-ARMA_BIC"
+OUTPUT_DIR = HUB_ROOT / "model-output" / "BASELINE-ARMA_BIC"
 
 TARGETS = [
     "INDPRO", "UNRATE", "PAYEMS", "CPIAUCSL", "PCEPI",
@@ -184,7 +184,7 @@ def main():
 
     forecast_df = pd.DataFrame(records)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / f"{origin_date}-SBE_EDS-ARMA_BIC.csv"
+    output_path = OUTPUT_DIR / f"{origin_date}-BASELINE-ARMA_BIC.csv"
     forecast_df.to_csv(output_path, index=False)
     print(f"\nSaved {len(forecast_df)} rows to {output_path}")
 

@@ -18,8 +18,8 @@
       "Bash(gh pr create --title 'Add SBE_EDS-ARMA_BIC model submission \\(2026-04-15\\)' --body ':*)",
       "Bash(gh pr:*)",
       "Bash(gh run:*)",
-      "Bash(find \"/Users/siccokooiker/Nextcloud/SBE_EDS_MLinMacro \\(Projectfolder\\)/AI_projects/Macro_Forecast_Hub\" -type f -name \"*.py\" ! -path \"*/.venv/*\" ! -path \"*/.git/*\" -exec grep -l \"evaluate\\\\|evaluate\\\\|leaderboard\\\\|rank\" {} \\\\;)",
-      "Bash(python -c \"import ast; ast.parse\\(open\\('src/scoring/score_forecasts.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")"
+      "Bash(ls model-output/MacroHub-Baseline/*.csv)",
+      "Bash(ls model-output/SBE_EDS-ARMA_BIC/*.csv)"
     ]
   }
 }

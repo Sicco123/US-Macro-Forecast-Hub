@@ -2,8 +2,9 @@
 Fetch FRED-MD target indicators and produce target data files for the
 Macro Forecast Hub.
 
-Uses the FRED API (via fredapi) to download individual series. This is more
-reliable than scraping the FRED-MD CSV, which is behind bot protection.
+Incremental: reads existing local data and only queries the FRED API for
+observations newer than what we already have. On first run, downloads the
+full history.
 
 To obtain a free API key, register at:
     https://fred.stlouisfed.org/docs/api/api_key.html
@@ -64,21 +65,58 @@ TRANSFORM_CODES = {
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
-def download_series(fred: Fred, indicators: list[str]) -> pd.DataFrame:
-    """Download all target series from FRED and return a combined DataFrame."""
+def load_existing(output_dir: Path) -> pd.DataFrame:
+    """Load existing target data if available."""
+    latest_path = output_dir / "latest-target_values.csv"
+    if latest_path.exists():
+        df = pd.read_csv(latest_path)
+        if not df.empty:
+            return df
+    return pd.DataFrame(columns=["target", "location", "truth_date", "year_month", "value"])
+
+
+def get_latest_dates(existing_df: pd.DataFrame) -> dict[str, str]:
+    """Return the latest truth_date per target series from existing data."""
+    if existing_df.empty:
+        return {}
+    return (
+        existing_df.groupby("target")["truth_date"]
+        .max()
+        .to_dict()
+    )
+
+
+def fetch_new_observations(
+    fred: Fred, indicators: list[str], latest_dates: dict[str, str]
+) -> pd.DataFrame:
+    """Query FRED API only for observations after what we already have."""
     records = []
+    skipped = 0
 
     for series_id in indicators:
-        # RETAILx is a constructed series in FRED-MD; map to the FRED id
         fred_id = "RSAFS" if series_id == "RETAILx" else series_id
+        last_date = latest_dates.get(series_id)
 
-        print(f"  Fetching {series_id} (FRED: {fred_id}) ...")
+        if last_date is not None:
+            # Start one day after the last date we have
+            obs_start = (pd.Timestamp(last_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+            print(f"  {series_id}: fetching after {last_date} ...", end=" ")
+        else:
+            obs_start = None
+            print(f"  {series_id}: fetching full history ...", end=" ")
+
         try:
-            s = fred.get_series(fred_id)
+            s = fred.get_series(fred_id, observation_start=obs_start)
         except Exception as e:
-            print(f"  Warning: could not fetch {fred_id}: {e}")
+            print(f"error: {e}")
             continue
 
+        if s is None or s.empty:
+            print("no new data")
+            skipped += 1
+            continue
+
+        count = 0
         for date, value in s.items():
             if pd.isna(value):
                 continue
@@ -91,8 +129,30 @@ def download_series(fred: Fred, indicators: list[str]) -> pd.DataFrame:
                 "year_month": ts.strftime("%Y-%m"),
                 "value": round(float(value), 4),
             })
+            count += 1
+
+        print(f"{count} new obs")
+
+    if skipped == len(indicators):
+        print("All series up to date — no API calls needed.")
 
     return pd.DataFrame(records)
+
+
+def merge_data(existing_df: pd.DataFrame, new_df: pd.DataFrame) -> pd.DataFrame:
+    """Merge new observations into existing data, updating any revised values."""
+    if new_df.empty:
+        return existing_df
+    if existing_df.empty:
+        return new_df
+
+    combined = pd.concat([existing_df, new_df], ignore_index=True)
+    # Keep the latest value for each (target, truth_date) — handles revisions
+    combined = combined.drop_duplicates(
+        subset=["target", "truth_date"], keep="last"
+    )
+    combined = combined.sort_values(["target", "truth_date"]).reset_index(drop=True)
+    return combined
 
 
 def save_target_data(target_df: pd.DataFrame, output_dir: Path, snapshot: bool = True):
@@ -144,6 +204,11 @@ def main():
         default=None,
         help="FRED API key (or set FRED_API_KEY env var)",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Force full re-download (ignore existing data)",
+    )
     args = parser.parse_args()
 
     api_key = args.api_key or os.environ.get("FRED_API_KEY")
@@ -160,10 +225,24 @@ def main():
     fred = Fred(api_key=api_key)
     output_dir = Path(args.output_dir)
 
-    print(f"Downloading {len(TARGET_INDICATORS)} series from FRED API ...")
-    target_df = download_series(fred, TARGET_INDICATORS)
-    print(f"Downloaded {len(target_df)} total observations")
+    # Load existing data
+    if args.full:
+        existing_df = pd.DataFrame()
+        latest_dates = {}
+        print("Full download requested.")
+    else:
+        existing_df = load_existing(output_dir)
+        latest_dates = get_latest_dates(existing_df)
+        if latest_dates:
+            print(f"Found existing data for {len(latest_dates)} series.")
+        else:
+            print("No existing data found — downloading full history.")
 
+    # Fetch only new observations
+    new_df = fetch_new_observations(fred, TARGET_INDICATORS, latest_dates)
+
+    # Merge and save
+    target_df = merge_data(existing_df, new_df)
     save_target_data(target_df, output_dir, snapshot=not args.no_snapshot)
     save_transform_codes(output_dir)
 
