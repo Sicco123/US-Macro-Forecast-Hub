@@ -2,9 +2,9 @@ name: Update Target Data
 
 on:
   schedule:
-    # Run on the 1st and 15th of each month at 10:00 UTC
-    # FRED-MD is typically updated around the start of each month
-    - cron: '0 10 1,15 * *'
+    # Run on the 8th of each month at 10:00 UTC
+    # FRED-MD is typically updated in the first week of each month
+    - cron: '0 10 8 * *'
   workflow_dispatch:
 
 jobs:
