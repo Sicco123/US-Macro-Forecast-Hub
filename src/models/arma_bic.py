@@ -51,8 +51,17 @@ def last_day_of_month(year: int, month: int) -> str:
     return (next_month - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
 
+def _standardize(series: np.ndarray) -> tuple[np.ndarray, float, float]:
+    """Standardize series to zero mean, unit variance for numerical stability."""
+    mu, sigma = series.mean(), series.std()
+    if sigma == 0:
+        sigma = 1.0
+    return (series - mu) / sigma, mu, sigma
+
+
 def select_arma_order(series: np.ndarray) -> tuple[int, int]:
     """Select (p, q) by minimizing BIC over a grid search."""
+    z, _, _ = _standardize(series)
     best_bic = np.inf
     best_order = (1, 0)
 
@@ -61,7 +70,7 @@ def select_arma_order(series: np.ndarray) -> tuple[int, int]:
             if p == 0 and q == 0:
                 continue
             try:
-                model = ARIMA(series, order=(p, 0, q))
+                model = ARIMA(z, order=(p, 0, q))
                 result = model.fit(method_kwargs={"maxiter": 200})
                 if result.bic < best_bic:
                     best_bic = result.bic
@@ -74,16 +83,22 @@ def select_arma_order(series: np.ndarray) -> tuple[int, int]:
 
 def forecast_arma(series: np.ndarray, p: int, q: int, n_ahead: int) -> tuple[np.ndarray, np.ndarray]:
     """
-    Fit ARMA(p,q) and return (point_forecasts, forecast_std) for 1..n_ahead steps.
+    Fit ARMA(p,q) on standardized data and return (point_forecasts, forecast_std)
+    in the original scale for 1..n_ahead steps.
     """
-    model = ARIMA(series, order=(p, 0, q))
+    z, mu, sigma = _standardize(series)
+    model = ARIMA(z, order=(p, 0, q))
     result = model.fit(method_kwargs={"maxiter": 200})
 
     forecast_result = result.get_forecast(steps=n_ahead)
-    point = forecast_result.predicted_mean
-    std = forecast_result.se_mean
+    point_z = np.array(forecast_result.predicted_mean)
+    std_z = np.array(forecast_result.se_mean)
 
-    return np.array(point), np.array(std)
+    # Transform back to original scale
+    point = point_z * sigma + mu
+    std = std_z * sigma
+
+    return point, std
 
 
 def generate_forecasts(target_df: pd.DataFrame, origin_date: str) -> list[dict]:
