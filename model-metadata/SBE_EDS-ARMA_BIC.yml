@@ -1,0 +1,24 @@
+team_name: SBE Economics Data Science
+team_abbr: SBE_EDS
+model_name: ARMA with BIC Lag Selection
+model_abbr: ARMA_BIC
+model_version: "1.0"
+model_contributors:
+  - name: Sicco Kooiker
+    affiliation: SBE EDS - Machine Learning in Macroeconomics
+    email: macro-forecast-hub@example.org
+team_model_designation: primary
+methods: >-
+  Univariate ARMA model for each target. Lag orders (p, q) selected by
+  minimizing the Bayesian Information Criterion over a grid search.
+  Quantile forecasts from Gaussian predictive distribution.
+methods_long: >-
+  For each target indicator, we fit a univariate ARMA(p,q) model where the
+  lag orders p and q are selected by minimizing the Bayesian Information
+  Criterion (BIC) over p in {0,...,6} and q in {0,...,4}. The model is
+  estimated on levels using conditional maximum likelihood. Multi-step
+  forecasts are generated iteratively. Quantile forecasts are derived from
+  the Gaussian predictive distribution with forecast-error variance
+  computed from the model's residual variance scaled by the horizon.
+data_inputs: FRED-MD monthly dataset (target indicators only)
+license: CC-BY-4.0
