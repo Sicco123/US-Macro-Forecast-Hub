@@ -24,10 +24,12 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install pandas
+        run: pip install pandas fredapi python-dotenv
 
       - name: Fetch latest FRED-MD data
         run: python target-data/fetch_fred_md.py --output-dir target-data
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
 
       - name: Check for changes
         id: check
