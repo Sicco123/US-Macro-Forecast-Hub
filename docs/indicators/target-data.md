@@ -55,7 +55,7 @@ transformed to achieve stationarity:
 
 ## Updating Target Data
 
-The automated GitHub Actions workflow fetches new data on the 1st and 15th of
+The automated GitHub Actions workflow fetches new data on the 10th of
 each month. To update manually:
 
 ```bash

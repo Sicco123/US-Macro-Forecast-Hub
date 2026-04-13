@@ -12,7 +12,14 @@
       "Bash(curl -svL \"https://research.stlouisfed.org/-/media/project/frbstl/stlouisfed/research/fred-md/monthly/2026-03-md.csv\")",
       "Bash(curl -sL -o /tmp/fred_test.csv \"https://research.stlouisfed.org/-/media/project/frbstl/stlouisfed/research/fred-md/monthly/2026-03-md.csv\")",
       "Read(//tmp/**)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(gh auth:*)",
+      "Bash(gh repo:*)",
+      "Bash(gh pr create --title 'Add SBE_EDS-ARMA_BIC model submission \\(2026-04-15\\)' --body ':*)",
+      "Bash(gh pr:*)",
+      "Bash(gh run:*)",
+      "Bash(find \"/Users/siccokooiker/Nextcloud/SBE_EDS_MLinMacro \\(Projectfolder\\)/AI_projects/Macro_Forecast_Hub\" -type f -name \"*.py\" ! -path \"*/.venv/*\" ! -path \"*/.git/*\" -exec grep -l \"evaluate\\\\|evaluate\\\\|leaderboard\\\\|rank\" {} \\\\;)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('src/scoring/score_forecasts.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")"
     ]
   }
 }

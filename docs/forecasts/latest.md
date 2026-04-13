@@ -10,7 +10,7 @@ models.
 **Submission round:** See `supporting-files/forecast_months.csv` for the current
 active round.
 
-**Deadline:** 15th of the current month, 23:59 US/Eastern.
+**Deadline:** 17th of the current month, 23:59 US/Eastern.
 
 ---
 

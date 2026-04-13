@@ -11,7 +11,6 @@ Reference:
     PLOS Computational Biology.
 """
 
-import csv
 from datetime import datetime
 from pathlib import Path
 
@@ -59,8 +58,54 @@ def compute_wis(quantiles: np.ndarray, values: np.ndarray, observed: float) -> f
 
 
 def compute_mae(median_forecast: float, observed: float) -> float:
-    """Compute the Mean Absolute Error (point forecast)."""
+    """Compute the absolute error for a point forecast."""
     return abs(median_forecast - observed)
+
+
+def compute_rmse_component(forecast: float, observed: float) -> float:
+    """Compute the squared error for a point forecast.
+
+    To get RMSE, take sqrt of the mean of these across forecasts.
+    We store the squared error per observation so aggregation is straightforward.
+    """
+    return (forecast - observed) ** 2
+
+
+def compute_bias(forecast: float, observed: float) -> float:
+    """Compute signed error (forecast - observed).
+
+    Positive = overprediction, negative = underprediction.
+    Average across observations gives Mean Error (ME / Bias).
+    """
+    return forecast - observed
+
+
+def compute_interval_coverage(
+    lower: float, upper: float, observed: float
+) -> float:
+    """Return 1.0 if observed falls within [lower, upper], else 0.0."""
+    return 1.0 if lower <= observed <= upper else 0.0
+
+
+def compute_interval_width(lower: float, upper: float) -> float:
+    """Return the width of a prediction interval."""
+    return upper - lower
+
+
+def compute_quantile_score(q: float, forecast_value: float, observed: float) -> float:
+    """Compute the pinball / quantile loss for a single quantile level.
+
+    QS_q = 2 * (observed - forecast) * (q - I(observed < forecast))
+         = 2 * q * (observed - forecast)        if observed >= forecast
+         = 2 * (1 - q) * (forecast - observed)  if observed < forecast
+
+    The factor-of-2 convention makes the quantile score consistent with the
+    absolute error when q = 0.5.
+    """
+    if observed >= forecast_value:
+        return 2 * q * (observed - forecast_value)
+    else:
+        return 2 * (1 - q) * (forecast_value - observed)
 
 
 def load_target_data() -> pd.DataFrame:
@@ -129,6 +174,16 @@ def score_all() -> pd.DataFrame:
             continue
         observed = truth_lookup[truth_key]
 
+        base_row = {
+            "origin_date": group_df["origin_date"].iloc[0],
+            "target": target,
+            "target_end_date": target_end_date,
+            "horizon": horizon,
+            "location": location,
+            "team_id": team_id,
+            "model_id": model_id,
+        }
+
         # Extract quantile forecasts
         q_rows = group_df[group_df["output_type"] == "quantile"].copy()
         if not q_rows.empty:
@@ -137,35 +192,67 @@ def score_all() -> pd.DataFrame:
             quantiles = q_rows["output_type_id"].values
             values = q_rows["value"].values
 
+            # Sort once for all quantile-based metrics
+            order = np.argsort(quantiles)
+            quantiles_sorted = quantiles[order]
+            values_sorted = values[order]
+            q_lookup = dict(zip(quantiles_sorted, values_sorted))
+
+            # --- WIS ---
             wis = compute_wis(quantiles, values, observed)
+            scores.append({**base_row, "metric": "WIS", "value_absolute": round(wis, 6)})
+
+            # --- Interval Coverage & Width for 50% and 95% PIs ---
+            interval_levels = {
+                "50": (0.25, 0.75),
+                "95": (0.025, 0.975),
+            }
+            for level_name, (q_lo, q_hi) in interval_levels.items():
+                if q_lo in q_lookup and q_hi in q_lookup:
+                    lo_val, hi_val = q_lookup[q_lo], q_lookup[q_hi]
+
+                    cov = compute_interval_coverage(lo_val, hi_val, observed)
+                    scores.append({
+                        **base_row,
+                        "metric": f"Coverage_{level_name}",
+                        "value_absolute": cov,
+                    })
+
+                    width = compute_interval_width(lo_val, hi_val)
+                    scores.append({
+                        **base_row,
+                        "metric": f"IntervalWidth_{level_name}",
+                        "value_absolute": round(width, 6),
+                    })
+
+            # --- Mean Quantile Score (average pinball loss across all quantiles) ---
+            qs_values = [
+                compute_quantile_score(q, v, observed)
+                for q, v in zip(quantiles_sorted, values_sorted)
+            ]
+            mean_qs = float(np.mean(qs_values))
             scores.append({
-                "origin_date": group_df["origin_date"].iloc[0],
-                "target": target,
-                "target_end_date": target_end_date,
-                "horizon": horizon,
-                "location": location,
-                "team_id": team_id,
-                "model_id": model_id,
-                "metric": "WIS",
-                "value_absolute": round(wis, 6),
+                **base_row,
+                "metric": "MeanQS",
+                "value_absolute": round(mean_qs, 6),
             })
 
-        # Extract median/mean for MAE
+        # Extract median/mean for point-forecast metrics
         median_rows = group_df[group_df["output_type"].isin(["median"])]
         if not median_rows.empty:
             median_val = float(median_rows["value"].iloc[0])
+
+            # --- MAE ---
             mae = compute_mae(median_val, observed)
-            scores.append({
-                "origin_date": group_df["origin_date"].iloc[0],
-                "target": target,
-                "target_end_date": target_end_date,
-                "horizon": horizon,
-                "location": location,
-                "team_id": team_id,
-                "model_id": model_id,
-                "metric": "MAE",
-                "value_absolute": round(mae, 6),
-            })
+            scores.append({**base_row, "metric": "MAE", "value_absolute": round(mae, 6)})
+
+            # --- Squared Error (for RMSE aggregation) ---
+            se = compute_rmse_component(median_val, observed)
+            scores.append({**base_row, "metric": "SE", "value_absolute": round(se, 6)})
+
+            # --- Bias (signed error) ---
+            bias = compute_bias(median_val, observed)
+            scores.append({**base_row, "metric": "Bias", "value_absolute": round(bias, 6)})
 
     scores_df = pd.DataFrame(scores)
 
@@ -177,7 +264,12 @@ def score_all() -> pd.DataFrame:
         (scores_df["team_id"] == "MacroHub") & (scores_df["model_id"] == "Baseline")
     ].set_index(["target", "target_end_date", "horizon", "location", "metric"])["value_absolute"]
 
+    # Metrics where a ratio to baseline is meaningful (lower-is-better scale metrics)
+    ratio_metrics = {"WIS", "MAE", "SE", "MeanQS", "IntervalWidth_50", "IntervalWidth_95"}
+
     def compute_relative(row):
+        if row["metric"] not in ratio_metrics:
+            return np.nan
         key = (row["target"], row["target_end_date"], row["horizon"], row["location"], row["metric"])
         if key in baseline_scores.index:
             baseline = baseline_scores[key]
@@ -187,10 +279,31 @@ def score_all() -> pd.DataFrame:
 
     scores_df["value_relative"] = scores_df.apply(compute_relative, axis=1)
 
-    # Compute ranks within each group
+    # Compute ranks within each group.
+    # For most metrics, lower is better (ascending rank). For Coverage metrics,
+    # rank by how close to the nominal level (e.g. 0.50 or 0.95); for Bias,
+    # rank by absolute value (closest to zero is best).
     rank_group = ["target", "target_end_date", "horizon", "location", "metric"]
-    scores_df["rank"] = scores_df.groupby(rank_group)["value_absolute"].rank(method="min").astype(int)
     scores_df["n_models"] = scores_df.groupby(rank_group)["value_absolute"].transform("count").astype(int)
+
+    nominal_coverage = {"Coverage_50": 0.50, "Coverage_95": 0.95}
+
+    def _rank_group(g):
+        metric = g["metric"].iloc[0]
+        if metric in nominal_coverage:
+            # Rank by absolute deviation from nominal coverage level
+            deviation = (g["value_absolute"] - nominal_coverage[metric]).abs()
+            return deviation.rank(method="min").astype(int)
+        elif metric == "Bias":
+            # Rank by absolute bias (closest to zero is best)
+            return g["value_absolute"].abs().rank(method="min").astype(int)
+        else:
+            # Lower is better
+            return g["value_absolute"].rank(method="min").astype(int)
+
+    scores_df["rank"] = scores_df.groupby(rank_group, group_keys=False).apply(
+        lambda g: _rank_group(g)
+    )
 
     return scores_df
 

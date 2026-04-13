@@ -37,7 +37,7 @@ forecast combining the wisdom of all participants.
 - **Frequency:** Monthly
 - **Horizons:** 0 (nowcast) through 4 months ahead
 - **Output:** 23 quantile levels (0.01 to 0.99) + optional median/mean
-- **Submission deadline:** 15th of each month
+- **Submission deadline:** 17th of each month
 - **Evaluation metric:** Weighted Interval Score (WIS)
 
 ---
@@ -90,11 +90,11 @@ See [docs/participate/](docs/participate/) for detailed instructions.
 
 ```csv
 origin_date,target,target_end_date,horizon,location,output_type,output_type_id,value
-2026-04-15,INDPRO,2026-04-30,0,US,quantile,0.025,99.1
-2026-04-15,INDPRO,2026-04-30,0,US,quantile,0.5,102.3
-2026-04-15,INDPRO,2026-04-30,0,US,quantile,0.975,105.2
-2026-04-15,INDPRO,2026-04-30,0,US,median,,102.3
-2026-04-15,INDPRO,2026-05-31,1,US,quantile,0.025,98.5
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.025,99.1
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.5,102.3
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.975,105.2
+2026-04-17,INDPRO,2026-04-30,0,US,median,,102.3
+2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.025,98.5
 ...
 ```
 
@@ -111,7 +111,7 @@ python target-data/fetch_fred_md.py
 python src/models/baseline.py
 
 # Validate a submission
-CHANGED_FILES="model-output/MyTeam-MyModel/2026-04-15-MyTeam-MyModel.csv" \
+CHANGED_FILES="model-output/MyTeam-MyModel/2026-04-17-MyTeam-MyModel.csv" \
   python src/validation/validate_forecast.py
 
 # Score forecasts
@@ -128,7 +128,7 @@ mkdocs serve
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
 | `validate_submission` | PR to `model-output/` | Validates forecast format and metadata |
-| `update_target_data` | 1st & 15th monthly | Fetches latest FRED-MD data |
+| `update_target_data` | 10th monthly | Fetches latest FRED-MD data |
 | `generate_baseline` | After data update | Produces baseline & ensemble forecasts |
 | `scoring` | After data update | Evaluates all forecasts against realized values |
 | `deploy_website` | Push to `docs/` | Builds and deploys the GitHub Pages site |

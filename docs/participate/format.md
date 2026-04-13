@@ -10,7 +10,7 @@ Forecast files must be CSV files with the following structure.
 model-output/{team_abbr}-{model_abbr}/YYYY-MM-DD-{team_abbr}-{model_abbr}.csv
 ```
 
-- `YYYY-MM-DD` — the origin date (forecast submission date, typically the 15th)
+- `YYYY-MM-DD` — the origin date (forecast submission date, typically the 17th)
 - `{team_abbr}` — your team abbreviation (max 16 chars, alphanumeric + underscore)
 - `{model_abbr}` — your model abbreviation (max 16 chars, alphanumeric + underscore)
 
@@ -75,15 +75,15 @@ The remaining 8 indicators are optional.
 
 ```csv
 origin_date,target,target_end_date,horizon,location,output_type,output_type_id,value
-2026-04-15,INDPRO,2026-04-30,0,US,quantile,0.01,98.5
-2026-04-15,INDPRO,2026-04-30,0,US,quantile,0.025,99.1
-2026-04-15,INDPRO,2026-04-30,0,US,quantile,0.05,99.5
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.01,98.5
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.025,99.1
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.05,99.5
 ...
-2026-04-15,INDPRO,2026-04-30,0,US,quantile,0.975,105.2
-2026-04-15,INDPRO,2026-04-30,0,US,quantile,0.99,106.1
-2026-04-15,INDPRO,2026-04-30,0,US,median,,102.3
-2026-04-15,INDPRO,2026-05-31,1,US,quantile,0.01,97.8
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.975,105.2
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.99,106.1
+2026-04-17,INDPRO,2026-04-30,0,US,median,,102.3
+2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.01,97.8
 ...
-2026-04-15,UNRATE,2026-04-30,0,US,quantile,0.01,3.2
+2026-04-17,UNRATE,2026-04-30,0,US,quantile,0.01,3.2
 ...
 ```

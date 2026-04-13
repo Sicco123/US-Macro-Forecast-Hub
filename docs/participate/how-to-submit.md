@@ -21,9 +21,9 @@ main branch.
 
 | Event | Timing |
 |-------|--------|
-| **Submission window opens** | 8th of each month |
-| **Submission deadline** | 15th of each month, 23:59 US/Eastern |
-| **Target data updated** | ~1st of each month (FRED-MD release) |
+| **Submission window opens** | 10th of each month |
+| **Submission deadline** | 17th of each month, 23:59 US/Eastern |
+| **Target data updated** | ~10th of each month (FRED-MD release) |
 | **Scores published** | After target data is available |
 
 ---
@@ -49,7 +49,7 @@ Produce a CSV file following the [submission format](format.md).
 
 Name it: `YYYY-MM-DD-{team_abbr}-{model_abbr}.csv`
 
-For example: `2026-04-15-MyTeam-ARModel.csv`
+For example: `2026-04-17-MyTeam-ARModel.csv`
 
 ### 4. Add model metadata
 
@@ -90,7 +90,7 @@ update your PR accordingly.
 !!! tip "Test locally before submitting"
     Run the validation scripts locally:
     ```bash
-    CHANGED_FILES="model-output/MyTeam-ARModel/2026-04-15-MyTeam-ARModel.csv" \
+    CHANGED_FILES="model-output/MyTeam-ARModel/2026-04-17-MyTeam-ARModel.csv" \
       python src/validation/validate_forecast.py
     ```
 

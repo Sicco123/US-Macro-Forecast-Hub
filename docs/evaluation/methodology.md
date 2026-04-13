@@ -42,11 +42,36 @@ $$
 
 ## Additional Metrics
 
+### Point Forecast Metrics
+
 | Metric | Description |
 |--------|-------------|
 | **MAE** | Mean Absolute Error of the median forecast |
-| **Coverage** | Empirical coverage of the 50% and 95% prediction intervals |
+| **SE** | Squared Error of the median forecast (average and take sqrt for RMSE) |
+| **Bias** | Signed error (forecast − observed); positive = overprediction |
+
+### Quantile / Interval Metrics
+
+| Metric | Description |
+|--------|-------------|
+| **Coverage_50** | Empirical coverage of the 50% prediction interval (Q25–Q75) |
+| **Coverage_95** | Empirical coverage of the 95% prediction interval (Q2.5–Q97.5) |
+| **IntervalWidth_50** | Width of the 50% prediction interval (sharpness) |
+| **IntervalWidth_95** | Width of the 95% prediction interval (sharpness) |
+| **MeanQS** | Mean Quantile Score (average pinball loss across all quantile levels) |
 | **Relative WIS** | WIS divided by the baseline model's WIS (< 1.0 is better) |
+
+### Interpreting the Metrics
+
+- **Calibration** is assessed via Coverage metrics: a well-calibrated model has
+  Coverage_50 ≈ 0.50 and Coverage_95 ≈ 0.95 when averaged over many forecasts.
+- **Sharpness** is assessed via IntervalWidth: among calibrated models, narrower
+  intervals indicate more informative forecasts.
+- **Bias** reveals systematic directional errors. Average Bias ≈ 0 is desirable.
+- **SE** is stored per observation; to compute RMSE across a group of forecasts,
+  take `sqrt(mean(SE))`.
+- **MeanQS** is closely related to WIS and provides a complementary view of
+  quantile forecast accuracy. Lower is better.
 
 ---
 
