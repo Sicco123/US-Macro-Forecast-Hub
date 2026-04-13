@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p model-output/MacroHub-Baseline model-output/MacroHub-Ensemble)",
+      "Bash(touch model-output/MacroHub-Baseline/.gitkeep model-output/MacroHub-Ensemble/.gitkeep model-evaluation/snapshots/.gitkeep target-data/snapshots/.gitkeep .github/data-storage/.gitkeep)",
+      "Bash(curl -sI \"https://files.stlouisfed.org/files/htdocs/fred-md/monthly/current.csv\")",
+      "Bash(curl -sL -o /dev/null -w \"%{http_code}\" \"https://research.stlouisfed.org/econ/mccracken/fred-databases/\")",
+      "Bash(curl -sL \"https://research.stlouisfed.org/econ/mccracken/fred-databases/\")",
+      "Bash(curl -sL -o /dev/null -w \"%{http_code}\" \"https://research.stlouisfed.org/-/media/project/frbstl/stlouisfed/research/fred-md/monthly/2026-03-md.csv\")",
+      "Bash(curl -sL \"https://research.stlouisfed.org/-/media/project/frbstl/stlouisfed/research/fred-md/monthly/2026-03-md.csv\")",
+      "Bash(curl -sL -H \"Accept: text/csv,*/*\" \"https://research.stlouisfed.org/-/media/project/frbstl/stlouisfed/research/fred-md/monthly/2026-03-md.csv\")",
+      "Bash(curl -svL \"https://research.stlouisfed.org/-/media/project/frbstl/stlouisfed/research/fred-md/monthly/2026-03-md.csv\")",
+      "Bash(curl -sL -o /tmp/fred_test.csv \"https://research.stlouisfed.org/-/media/project/frbstl/stlouisfed/research/fred-md/monthly/2026-03-md.csv\")",
+      "Read(//tmp/**)",
+      "Read(//private/tmp/**)"
+    ]
+  }
+}

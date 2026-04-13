@@ -1,0 +1,16 @@
+{
+  "schema_version": "v5.0.0",
+  "name": "Macro Forecast Hub",
+  "maintainer": "SBE EDS - Machine Learning in Macroeconomics",
+  "contact": {
+    "name": "Macro Forecast Hub Team",
+    "email": "macro-forecast-hub@example.org"
+  },
+  "repository": {
+    "host": "github",
+    "owner": "macro-forecast-hub",
+    "name": "Macro-Forecast-Hub"
+  },
+  "file_format": ["csv"],
+  "timezone": "US/Eastern"
+}

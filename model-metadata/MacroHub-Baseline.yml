@@ -1,0 +1,23 @@
+team_name: Macro Forecast Hub
+team_abbr: MacroHub
+model_name: Baseline
+model_abbr: Baseline
+model_version: "1.0"
+model_contributors:
+  - name: Macro Forecast Hub Team
+    affiliation: SBE EDS - Machine Learning in Macroeconomics
+    email: macro-forecast-hub@example.org
+team_model_designation: hub_baseline
+methods: >-
+  Random walk baseline model. For levels, the forecast equals the last observed
+  value. For rates, the forecast equals the last observed value. Prediction
+  intervals are based on historical forecast errors.
+methods_long: >-
+  The baseline model implements a simple random walk forecast for each target
+  indicator. Point forecasts are set equal to the most recent observed value
+  (no-change forecast). Quantile forecasts are derived from the empirical
+  distribution of past forecast errors at each horizon, using a rolling window
+  of historical data. This provides a standard benchmark against which all
+  other submitted models are evaluated.
+data_inputs: FRED-MD monthly dataset
+license: CC0-1.0

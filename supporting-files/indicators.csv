@@ -1,0 +1,13 @@
+indicator_id,indicator_name,category,fred_series_id,unit,seasonal_adjustment,transform,description
+INDPRO,Industrial Production Index,Real Activity,INDPRO,Index 2017=100,SA,log_diff,"Total Industrial Production Index, measuring real output of manufacturing, mining, and utilities"
+UNRATE,Unemployment Rate,Labor Market,UNRATE,Percent,SA,none,"Civilian Unemployment Rate, percentage of labor force"
+PAYEMS,Total Nonfarm Payrolls,Labor Market,PAYEMS,Thousands,SA,log_diff,"All Employees, Total Nonfarm, in thousands of persons"
+CPIAUCSL,Consumer Price Index,Prices,CPIAUCSL,Index 1982-84=100,SA,log_diff,"Consumer Price Index for All Urban Consumers: All Items"
+PCEPI,PCE Price Index,Prices,PCEPI,Index 2017=100,SA,log_diff,"Personal Consumption Expenditures: Chain-type Price Index"
+FEDFUNDS,Federal Funds Rate,Interest Rates,FEDFUNDS,Percent,NSA,none,"Effective Federal Funds Rate, monthly average"
+GS10,10-Year Treasury Rate,Interest Rates,GS10,Percent,NSA,none,"Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity"
+TB3MS,3-Month Treasury Bill,Interest Rates,TB3MS,Percent,NSA,none,"3-Month Treasury Bill Secondary Market Rate"
+HOUST,Housing Starts,Housing,HOUST,Thousands,SA,log_diff,"New Privately-Owned Housing Units Started, in thousands of units"
+M2SL,M2 Money Stock,Money & Credit,M2SL,Billions USD,SA,log_diff,"M2 Money Stock, in billions of dollars"
+DPCERA3M086SBEA,Real Personal Consumption,Real Activity,DPCERA3M086SBEA,Billions 2017 USD,SA,log_diff,"Real Personal Consumption Expenditures, in billions of chained 2017 dollars"
+RETAILx,Retail Sales,Real Activity,RETAILx,Millions USD,SA,log_diff,"Retail and Food Services Sales, in millions of dollars"

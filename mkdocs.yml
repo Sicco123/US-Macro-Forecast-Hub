@@ -1,0 +1,93 @@
+site_name: Macro Forecast Hub
+site_description: >-
+  A collaborative platform for probabilistic forecasting of U.S. macroeconomic
+  indicators from the FRED-MD monthly dataset.
+site_url: https://macro-forecast-hub.github.io/Macro-Forecast-Hub/
+
+repo_name: macro-forecast-hub/Macro-Forecast-Hub
+repo_url: https://github.com/macro-forecast-hub/Macro-Forecast-Hub
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Forecasts:
+    - Latest Forecasts: forecasts/latest.md
+    - Forecast Archive: forecasts/archive.md
+  - Evaluation:
+    - Leaderboard: evaluation/leaderboard.md
+    - Methodology: evaluation/methodology.md
+  - Participate:
+    - How to Submit: participate/how-to-submit.md
+    - Submission Format: participate/format.md
+    - Model Metadata: participate/metadata.md
+  - Indicators:
+    - Overview: indicators/overview.md
+    - Target Data: indicators/target-data.md
+  - About:
+    - About the Hub: about/index.md
+    - Team: about/team.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - tables
+  - attr_list
+  - md_in_html
+  - def_list
+  - footnotes
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/macro-forecast-hub/Macro-Forecast-Hub
+
+copyright: >-
+  Macro Forecast Hub &mdash; SBE EDS Machine Learning in Macroeconomics

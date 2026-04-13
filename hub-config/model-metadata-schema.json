@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Macro Forecast Hub Model Metadata",
+  "description": "Schema for model metadata submissions to the Macro Forecast Hub",
+  "type": "object",
+  "required": [
+    "team_name",
+    "team_abbr",
+    "model_name",
+    "model_abbr",
+    "model_contributors",
+    "team_model_designation",
+    "methods",
+    "data_inputs"
+  ],
+  "properties": {
+    "team_name": {
+      "description": "The name of the team submitting the model",
+      "type": "string",
+      "maxLength": 50
+    },
+    "team_abbr": {
+      "description": "Abbreviated team name (used in file naming)",
+      "type": "string",
+      "maxLength": 16,
+      "pattern": "^[a-zA-Z0-9_]+$"
+    },
+    "model_name": {
+      "description": "The name of the model",
+      "type": "string",
+      "maxLength": 50
+    },
+    "model_abbr": {
+      "description": "Abbreviated model name (used in file naming)",
+      "type": "string",
+      "maxLength": 16,
+      "pattern": "^[a-zA-Z0-9_]+$"
+    },
+    "model_version": {
+      "description": "Version identifier for the model",
+      "type": "string",
+      "maxLength": 32
+    },
+    "model_contributors": {
+      "description": "List of individuals contributing to the model",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "affiliation", "email"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "affiliation": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "orcid": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{4}-\\d{4}-\\d{3}[\\dX]$"
+          }
+        }
+      }
+    },
+    "team_model_designation": {
+      "description": "Role of this model within the team's submissions",
+      "type": "string",
+      "enum": [
+        "primary",
+        "secondary",
+        "proposed",
+        "other",
+        "ensemble",
+        "hub_baseline"
+      ]
+    },
+    "methods": {
+      "description": "Brief description of the forecasting methodology (max 200 chars)",
+      "type": "string",
+      "maxLength": 200
+    },
+    "methods_long": {
+      "description": "Detailed description of the forecasting methodology",
+      "type": "string"
+    },
+    "data_inputs": {
+      "description": "Description of data sources used by the model",
+      "type": "string"
+    },
+    "license": {
+      "description": "License for the model output",
+      "type": "string",
+      "enum": [
+        "CC0-1.0",
+        "CC-BY-4.0",
+        "CC-BY-SA-4.0",
+        "PPDL",
+        "ODC-by",
+        "ODbL",
+        "OGL-3.0"
+      ]
+    },
+    "website_url": {
+      "description": "URL for the model or team website",
+      "type": "string",
+      "format": "uri"
+    },
+    "team_funding": {
+      "description": "Description of funding sources",
+      "type": "string"
+    },
+    "citation": {
+      "description": "Citation for the model or related publications",
+      "type": "string"
+    },
+    "ensemble_of_models": {
+      "description": "If an ensemble, list the component models",
+      "type": "boolean"
+    },
+    "ensemble_of_hub_models": {
+      "description": "If an ensemble of hub models, set to true",
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

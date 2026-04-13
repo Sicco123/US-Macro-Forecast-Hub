@@ -1,0 +1,188 @@
+{
+  "schema_version": "v5.0.0",
+  "rounds": [
+    {
+      "round_id_from_variable": true,
+      "round_id": "origin_date",
+      "round_name": "Monthly Macro Forecast Round",
+      "model_tasks": [
+        {
+          "task_ids": {
+            "origin_date": {
+              "required": null,
+              "optional": [
+                "2025-01-15", "2025-02-15", "2025-03-15", "2025-04-15",
+                "2025-05-15", "2025-06-15", "2025-07-15", "2025-08-15",
+                "2025-09-15", "2025-10-15", "2025-11-15", "2025-12-15",
+                "2026-01-15", "2026-02-15", "2026-03-15", "2026-04-15",
+                "2026-05-15", "2026-06-15", "2026-07-15", "2026-08-15",
+                "2026-09-15", "2026-10-15", "2026-11-15", "2026-12-15"
+              ]
+            },
+            "target": {
+              "required": [
+                "INDPRO",
+                "UNRATE",
+                "PAYEMS",
+                "CPIAUCSL"
+              ],
+              "optional": [
+                "PCEPI",
+                "FEDFUNDS",
+                "GS10",
+                "TB3MS",
+                "HOUST",
+                "M2SL",
+                "DPCERA3M086SBEA",
+                "RETAILx"
+              ]
+            },
+            "target_end_date": {
+              "required": null,
+              "optional": [
+                "2025-01-31", "2025-02-28", "2025-03-31", "2025-04-30",
+                "2025-05-31", "2025-06-30", "2025-07-31", "2025-08-31",
+                "2025-09-30", "2025-10-31", "2025-11-30", "2025-12-31",
+                "2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30",
+                "2026-05-31", "2026-06-30", "2026-07-31", "2026-08-31",
+                "2026-09-30", "2026-10-31", "2026-11-30", "2026-12-31"
+              ]
+            },
+            "horizon": {
+              "required": [1, 2, 3, 4],
+              "optional": [0]
+            },
+            "location": {
+              "required": ["US"],
+              "optional": null
+            }
+          },
+          "output_type": {
+            "quantile": {
+              "output_type_id": {
+                "required": [
+                  0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3,
+                  0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7,
+                  0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99
+                ],
+                "optional": null
+              },
+              "value": {
+                "type": "double"
+              }
+            },
+            "median": {
+              "output_type_id": {
+                "required": null,
+                "optional": [""]
+              },
+              "value": {
+                "type": "double"
+              }
+            },
+            "mean": {
+              "output_type_id": {
+                "required": null,
+                "optional": [""]
+              },
+              "value": {
+                "type": "double"
+              }
+            }
+          },
+          "target_metadata": [
+            {
+              "target_id": "INDPRO",
+              "target_name": "Industrial Production Index",
+              "target_units": "Index 2017=100",
+              "target_type": "continuous",
+              "description": "Total Industrial Production Index, measuring real output of manufacturing, mining, and utilities."
+            },
+            {
+              "target_id": "UNRATE",
+              "target_name": "Unemployment Rate",
+              "target_units": "Percent",
+              "target_type": "continuous",
+              "description": "Civilian Unemployment Rate, percentage of the labor force."
+            },
+            {
+              "target_id": "PAYEMS",
+              "target_name": "Total Nonfarm Payrolls",
+              "target_units": "Thousands of Persons",
+              "target_type": "continuous",
+              "description": "All Employees, Total Nonfarm, in thousands of persons."
+            },
+            {
+              "target_id": "CPIAUCSL",
+              "target_name": "Consumer Price Index",
+              "target_units": "Index 1982-84=100",
+              "target_type": "continuous",
+              "description": "Consumer Price Index for All Urban Consumers: All Items."
+            },
+            {
+              "target_id": "PCEPI",
+              "target_name": "PCE Price Index",
+              "target_units": "Index 2017=100",
+              "target_type": "continuous",
+              "description": "Personal Consumption Expenditures: Chain-type Price Index."
+            },
+            {
+              "target_id": "FEDFUNDS",
+              "target_name": "Federal Funds Rate",
+              "target_units": "Percent",
+              "target_type": "continuous",
+              "description": "Effective Federal Funds Rate, monthly average."
+            },
+            {
+              "target_id": "GS10",
+              "target_name": "10-Year Treasury Rate",
+              "target_units": "Percent",
+              "target_type": "continuous",
+              "description": "Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity."
+            },
+            {
+              "target_id": "TB3MS",
+              "target_name": "3-Month Treasury Bill Rate",
+              "target_units": "Percent",
+              "target_type": "continuous",
+              "description": "3-Month Treasury Bill Secondary Market Rate."
+            },
+            {
+              "target_id": "HOUST",
+              "target_name": "Housing Starts",
+              "target_units": "Thousands of Units",
+              "target_type": "continuous",
+              "description": "New Privately-Owned Housing Units Started, in thousands of units."
+            },
+            {
+              "target_id": "M2SL",
+              "target_name": "M2 Money Stock",
+              "target_units": "Billions of USD",
+              "target_type": "continuous",
+              "description": "M2 Money Stock, in billions of dollars."
+            },
+            {
+              "target_id": "DPCERA3M086SBEA",
+              "target_name": "Real Personal Consumption",
+              "target_units": "Billions of Chained 2017 USD",
+              "target_type": "continuous",
+              "description": "Real Personal Consumption Expenditures."
+            },
+            {
+              "target_id": "RETAILx",
+              "target_name": "Retail Sales",
+              "target_units": "Millions of USD",
+              "target_type": "continuous",
+              "description": "Retail and Food Services Sales, in millions of dollars."
+            }
+          ]
+        }
+      ],
+      "submissions_due": {
+        "relative_to": "origin_date",
+        "start": -7,
+        "end": 0
+      }
+    }
+  ]
+}

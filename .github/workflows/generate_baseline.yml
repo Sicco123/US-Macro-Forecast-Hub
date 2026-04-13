@@ -1,0 +1,52 @@
+name: Generate Baseline Forecast
+
+on:
+  # Run after target data is updated
+  workflow_run:
+    workflows: ["Update Target Data"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install pandas numpy
+
+      - name: Generate baseline forecast
+        run: python src/models/baseline.py
+
+      - name: Generate ensemble forecast
+        run: python src/models/ensemble.py
+
+      - name: Check for changes
+        id: check
+        run: |
+          if git diff --quiet model-output/; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push forecasts
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add model-output/
+          git commit -m "Generate baseline and ensemble forecasts $(date +%Y-%m-%d)"
+          git push

@@ -1,0 +1,25 @@
+team_name: Macro Forecast Hub
+team_abbr: MacroHub
+model_name: Hub Ensemble
+model_abbr: Ensemble
+model_version: "1.0"
+model_contributors:
+  - name: Macro Forecast Hub Team
+    affiliation: SBE EDS - Machine Learning in Macroeconomics
+    email: macro-forecast-hub@example.org
+team_model_designation: ensemble
+methods: >-
+  Equal-weighted quantile ensemble of all submitted models. Each quantile is
+  computed as the median of the corresponding quantiles across contributing
+  models.
+methods_long: >-
+  The hub ensemble combines forecasts from all participating models using
+  an equal-weight median aggregation scheme. For each target, horizon, and
+  quantile level, the ensemble value is the median of the values submitted
+  by individual models. Models must meet minimum submission requirements to
+  be included. This approach is robust to outlier submissions and has been
+  shown to perform well in forecasting competitions.
+data_inputs: Submitted model forecasts
+license: CC0-1.0
+ensemble_of_models: true
+ensemble_of_hub_models: true
