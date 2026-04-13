@@ -35,8 +35,8 @@ forecast combining the wisdom of all participants.
 ### Forecast Specifications
 
 - **Frequency:** Monthly
-- **Horizons:** 0 (nowcast) through 4 months ahead
-- **Output:** 23 quantile levels (0.01 to 0.99) + optional median/mean
+- **Horizons:** 1 through 24 months ahead
+- **Output:** 5 quantile levels (0.05, 0.1, 0.5, 0.9, 0.95) + optional mean
 - **Submission deadline:** 17th of each month
 - **Evaluation metric:** Weighted Interval Score (WIS)
 
@@ -51,7 +51,8 @@ Macro-Forecast-Hub/
 │   ├── tasks.json               #   Target definitions, horizons, output types
 │   └── model-metadata-schema.json  # Metadata validation schema
 ├── model-output/                # Forecast submissions (one dir per model)
-│   ├── MacroHub-Baseline/       #   Random walk baseline
+│   ├── MacroHub-RandomWalk/      #   Random walk baseline
+│   ├── BASELINE-ARMA_BIC/       #   ARMA model with BIC selection
 │   └── MacroHub-Ensemble/       #   Hub ensemble
 ├── model-metadata/              # Model/team descriptions (YAML)
 ├── model-evaluation/            # Forecast scores and rankings
@@ -90,11 +91,12 @@ See [docs/participate/](docs/participate/) for detailed instructions.
 
 ```csv
 origin_date,target,target_end_date,horizon,location,output_type,output_type_id,value
-2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.025,99.1
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.05,99.5
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.1,100.1
 2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.5,102.3
-2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.975,105.2
-2026-04-17,INDPRO,2026-04-30,0,US,median,,102.3
-2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.025,98.5
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.9,104.5
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.95,105.2
+2026-04-17,INDPRO,2026-04-30,0,US,mean,,102.4
 ...
 ```
 

@@ -19,7 +19,24 @@
       "Bash(gh pr:*)",
       "Bash(gh run:*)",
       "Bash(ls model-output/MacroHub-Baseline/*.csv)",
-      "Bash(ls model-output/SBE_EDS-ARMA_BIC/*.csv)"
+      "Bash(ls model-output/SBE_EDS-ARMA_BIC/*.csv)",
+      "WebFetch(domain:respicast.ecdc.europa.eu)",
+      "WebSearch",
+      "Bash(curl -s https://respicast.ecdc.europa.eu/forecasts/)",
+      "WebFetch(domain:github.com)",
+      "Bash(python src/scoring/score_forecasts.py)",
+      "Bash(python3 src/scoring/score_forecasts.py)",
+      "Bash(conda env:*)",
+      "Bash(pip3 list:*)",
+      "Bash(.venv/bin/python src/scoring/score_forecasts.py)",
+      "Bash(.venv/bin/python src/generate_dashboard_data.py)",
+      "Bash(lsof -ti:8000)",
+      "Bash(xargs kill:*)",
+      "Bash(.venv/bin/mkdocs build:*)",
+      "Bash(.venv/bin/mkdocs serve:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/)",
+      "Bash(/opt/homebrew/bin/python3.10 src/models/generate_two_years.py)",
+      "Bash(ls model-output/MacroHub-RandomWalk/2024-* model-output/MacroHub-RandomWalk/2025-* model-output/MacroHub-RandomWalk/2026-0[123]*)"
     ]
   }
 }

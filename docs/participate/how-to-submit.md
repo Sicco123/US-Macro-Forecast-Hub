@@ -99,5 +99,5 @@ update your PR accordingly.
     Other targets are optional but encouraged.
 
 !!! tip "Use the template"
-    Check the baseline model output in `model-output/MacroHub-Baseline/`
+    Check the baseline model output in `model-output/MacroHub-RandomWalk/`
     for an example of the expected format.

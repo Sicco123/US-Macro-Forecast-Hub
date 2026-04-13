@@ -1,6 +1,6 @@
 """
 Generate pseudo-real-time historical forecasts from 2000 onwards for:
-  - MacroHub-Baseline (random walk)
+  - MacroHub-RandomWalk (random walk)
   - BASELINE-ARMA_BIC (ARMA on FRED-MD transformed data, inverted back to levels)
 
 Targets: INDPRO, CPIAUCSL, PCEPI, UNRATE
@@ -24,7 +24,7 @@ warnings.filterwarnings("ignore")
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
 TARGET_DATA_PATH = HUB_ROOT / "target-data" / "latest-target_values.csv"
-BASELINE_DIR = HUB_ROOT / "model-output" / "MacroHub-Baseline"
+BASELINE_DIR = HUB_ROOT / "model-output" / "MacroHub-RandomWalk"
 ARMA_DIR = HUB_ROOT / "model-output" / "BASELINE-ARMA_BIC"
 
 TARGETS = {
@@ -35,11 +35,7 @@ TARGETS = {
     "UNRATE":   (2, 1, False),
 }
 
-QUANTILES = [
-    0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3,
-    0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7,
-    0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99,
-]
+QUANTILES = [0.05, 0.1, 0.5, 0.9, 0.95]
 
 HORIZONS = [0, 1, 2, 3, 4]
 MAX_P = 4
@@ -147,7 +143,7 @@ def make_rows(
         "target_end_date": target_end_date,
         "horizon": horizon,
         "location": "US",
-        "output_type": "median",
+        "output_type": "mean",
         "output_type_id": "",
         "value": round(float(point), 4),
     })
@@ -253,7 +249,7 @@ def run_backfill():
         # Save files
         if baseline_rows:
             df = pd.DataFrame(baseline_rows)
-            path = BASELINE_DIR / f"{origin_str}-MacroHub-Baseline.csv"
+            path = BASELINE_DIR / f"{origin_str}-MacroHub-RandomWalk.csv"
             df.to_csv(path, index=False)
 
         if arma_rows:

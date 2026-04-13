@@ -18,9 +18,9 @@ macroeconomic forecasting.
 | Feature | Description |
 |---------|-------------|
 | **12 Target Indicators** | Core macro series from FRED-MD including output, employment, prices, and interest rates |
-| **Probabilistic Forecasts** | Full predictive distributions via 23 quantile levels |
+| **Probabilistic Forecasts** | Predictive distributions via 5 quantile levels (0.05, 0.1, 0.5, 0.9, 0.95) |
 | **Monthly Frequency** | Forecasts submitted between the 10th and 17th of each month |
-| **1-4 Month Horizons** | Plus nowcasts for the current month |
+| **1-24 Month Horizons** | Monthly forecast horizons up to 2 years ahead |
 | **Automated Evaluation** | Weighted Interval Score (WIS) scoring against realized values |
 | **Hub Ensemble** | Median combination of all submitted models |
 

@@ -35,19 +35,15 @@ VALID_TARGETS = {
     "DPCERA3M086SBEA", "RETAILx",
 }
 
-REQUIRED_TARGETS = {"INDPRO", "UNRATE", "PAYEMS", "CPIAUCSL"}
+REQUIRED_TARGETS = {"INDPRO", "UNRATE", "CPIAUCSL"}
 
 VALID_HORIZONS = {0, 1, 2, 3, 4}
 
 VALID_LOCATIONS = {"US"}
 
-VALID_OUTPUT_TYPES = {"quantile", "median", "mean"}
+VALID_OUTPUT_TYPES = {"quantile", "mean"}
 
-REQUIRED_QUANTILES = [
-    0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3,
-    0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7,
-    0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99,
-]
+REQUIRED_QUANTILES = [0.05, 0.1, 0.5, 0.9, 0.95]
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
 

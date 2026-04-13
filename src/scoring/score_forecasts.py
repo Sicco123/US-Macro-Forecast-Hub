@@ -202,10 +202,10 @@ def score_all() -> pd.DataFrame:
             wis = compute_wis(quantiles, values, observed)
             scores.append({**base_row, "metric": "WIS", "value_absolute": round(wis, 6)})
 
-            # --- Interval Coverage & Width for 50% and 95% PIs ---
+            # --- Interval Coverage & Width for 80% and 90% PIs ---
             interval_levels = {
-                "50": (0.25, 0.75),
-                "95": (0.025, 0.975),
+                "80": (0.1, 0.9),
+                "90": (0.05, 0.95),
             }
             for level_name, (q_lo, q_hi) in interval_levels.items():
                 if q_lo in q_lookup and q_hi in q_lookup:
@@ -237,22 +237,18 @@ def score_all() -> pd.DataFrame:
                 "value_absolute": round(mean_qs, 6),
             })
 
-        # Extract median/mean for point-forecast metrics
-        median_rows = group_df[group_df["output_type"].isin(["median"])]
-        if not median_rows.empty:
-            median_val = float(median_rows["value"].iloc[0])
-
-            # --- MAE ---
+        # --- MAE: uses median (Q0.5) forecast ---
+        if not q_rows.empty and 0.5 in q_lookup:
+            median_val = q_lookup[0.5]
             mae = compute_mae(median_val, observed)
             scores.append({**base_row, "metric": "MAE", "value_absolute": round(mae, 6)})
 
-            # --- Squared Error (for RMSE aggregation) ---
-            se = compute_rmse_component(median_val, observed)
-            scores.append({**base_row, "metric": "SE", "value_absolute": round(se, 6)})
-
-            # --- Bias (signed error) ---
-            bias = compute_bias(median_val, observed)
-            scores.append({**base_row, "metric": "Bias", "value_absolute": round(bias, 6)})
+        # --- Squared Error for RMSE: uses mean forecast ---
+        mean_rows = group_df[group_df["output_type"] == "mean"]
+        if not mean_rows.empty:
+            mean_val = float(mean_rows["value"].iloc[0])
+            se = compute_rmse_component(mean_val, observed)
+            scores.append({**base_row, "metric": "SqErr", "value_absolute": round(se, 6)})
 
     scores_df = pd.DataFrame(scores)
 
@@ -261,11 +257,11 @@ def score_all() -> pd.DataFrame:
 
     # Compute relative scores (relative to baseline)
     baseline_scores = scores_df[
-        (scores_df["team_id"] == "MacroHub") & (scores_df["model_id"] == "Baseline")
+        (scores_df["team_id"] == "MacroHub") & (scores_df["model_id"] == "RandomWalk")
     ].set_index(["target", "target_end_date", "horizon", "location", "metric"])["value_absolute"]
 
     # Metrics where a ratio to baseline is meaningful (lower-is-better scale metrics)
-    ratio_metrics = {"WIS", "MAE", "SE", "MeanQS", "IntervalWidth_50", "IntervalWidth_95"}
+    ratio_metrics = {"WIS", "MAE", "SqErr", "MeanQS", "IntervalWidth_80", "IntervalWidth_90"}
 
     def compute_relative(row):
         if row["metric"] not in ratio_metrics:
@@ -286,7 +282,7 @@ def score_all() -> pd.DataFrame:
     rank_group = ["target", "target_end_date", "horizon", "location", "metric"]
     scores_df["n_models"] = scores_df.groupby(rank_group)["value_absolute"].transform("count").astype(int)
 
-    nominal_coverage = {"Coverage_50": 0.50, "Coverage_95": 0.95}
+    nominal_coverage = {"Coverage_80": 0.80, "Coverage_90": 0.90}
 
     def _rank_group(g):
         # "metric" is a groupby key so it's not in the DataFrame columns;

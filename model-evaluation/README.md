@@ -27,7 +27,7 @@ The WIS decomposes into three components:
 | `origin_date` | Forecast submission date |
 | `target` | FRED series identifier |
 | `target_end_date` | Month being forecasted |
-| `horizon` | Months ahead (0-4) |
+| `horizon` | Months ahead (1-24) |
 | `location` | Location code (US) |
 | `team_id` | Team abbreviation |
 | `model_id` | Model abbreviation |

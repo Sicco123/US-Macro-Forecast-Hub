@@ -17,13 +17,9 @@ import pandas as pd
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
 TARGET_DATA_PATH = HUB_ROOT / "target-data" / "latest-target_values.csv"
-OUTPUT_DIR = HUB_ROOT / "model-output" / "MacroHub-Baseline"
+OUTPUT_DIR = HUB_ROOT / "model-output" / "MacroHub-RandomWalk"
 
-REQUIRED_QUANTILES = [
-    0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3,
-    0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7,
-    0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99,
-]
+REQUIRED_QUANTILES = [0.05, 0.1, 0.5, 0.9, 0.95]
 
 TARGETS = [
     "INDPRO", "UNRATE", "PAYEMS", "CPIAUCSL", "PCEPI",
@@ -123,14 +119,14 @@ def generate_baseline_forecast(target_df: pd.DataFrame, origin_date: str) -> lis
                     "value": round(q_value, 4),
                 })
 
-            # Add median
+            # Add mean
             records.append({
                 "origin_date": origin_date,
                 "target": target,
                 "target_end_date": target_end_date,
                 "horizon": horizon,
                 "location": "US",
-                "output_type": "median",
+                "output_type": "mean",
                 "output_type_id": "",
                 "value": round(point_forecast, 4),
             })
@@ -155,7 +151,7 @@ def main():
 
     forecast_df = pd.DataFrame(records)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / f"{today}-MacroHub-Baseline.csv"
+    output_path = OUTPUT_DIR / f"{today}-MacroHub-RandomWalk.csv"
     forecast_df.to_csv(output_path, index=False)
     print(f"Saved {len(forecast_df)} rows to {output_path}")
 
