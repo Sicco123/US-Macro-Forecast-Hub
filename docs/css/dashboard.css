@@ -202,3 +202,11 @@
   min-height: 300px;
   border-radius: 8px;
 }
+
+/* Dark mode: Plotly modebar icons */
+[data-md-color-scheme="slate"] .modebar-btn path {
+  fill: rgba(255, 255, 255, 0.6) !important;
+}
+[data-md-color-scheme="slate"] .modebar-btn:hover path {
+  fill: rgba(255, 255, 255, 0.9) !important;
+}

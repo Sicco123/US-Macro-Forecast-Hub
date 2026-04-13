@@ -27,7 +27,7 @@ TARGETS = [
     "DPCERA3M086SBEA", "RETAILx",
 ]
 
-HORIZONS = [0, 1, 2, 3, 4]
+HORIZONS = list(range(24))  # 0..23
 
 # Minimum number of historical observations needed to estimate error distribution
 MIN_HISTORY = 24

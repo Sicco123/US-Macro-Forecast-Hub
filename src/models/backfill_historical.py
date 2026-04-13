@@ -37,7 +37,7 @@ TARGETS = {
 
 QUANTILES = [0.05, 0.1, 0.5, 0.9, 0.95]
 
-HORIZONS = [0, 1, 2, 3, 4]
+HORIZONS = list(range(24))  # 0..23
 MAX_P = 4
 MAX_Q = 2
 MIN_HISTORY = 120  # 10 years of monthly data before first forecast

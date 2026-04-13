@@ -17,8 +17,18 @@
     "#8d6e63", "#78909c",
   ];
 
-  const PLOTLY_FONT = { family: "Inter, system-ui, sans-serif", size: 13, color: "#444" };
-  const PLOTLY_GRID = { gridcolor: "rgba(0,0,0,0.06)", zerolinecolor: "rgba(0,0,0,0.1)" };
+  function isDark() {
+    return document.body.getAttribute("data-md-color-scheme") === "slate";
+  }
+  function plotlyFont() {
+    const c = isDark() ? "#ccc" : "#444";
+    return { family: "Inter, system-ui, sans-serif", size: 13, color: c };
+  }
+  function plotlyGrid() {
+    return isDark()
+      ? { gridcolor: "rgba(255,255,255,0.1)", zerolinecolor: "rgba(255,255,255,0.18)" }
+      : { gridcolor: "rgba(0,0,0,0.06)", zerolinecolor: "rgba(0,0,0,0.1)" };
+  }
   const PLOTLY_CONFIG = { responsive: true, displaylogo: false,
     modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"] };
 
@@ -82,6 +92,10 @@
     selSumView.addEventListener("change", drawSummary);
 
     try { summaryData = await fetchJSON(DATA_BASE + "summary.json"); } catch { summaryData = null; }
+
+    // Redraw charts when dark/light mode toggles
+    new MutationObserver(() => { drawChart(); drawSummary(); })
+      .observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
 
     switchTab("scores");
     await onTargetChange();
@@ -210,19 +224,22 @@
       });
     });
 
+    const dark = isDark();
     const layout = {
-      font: PLOTLY_FONT,
+      font: plotlyFont(),
       title: { text: `${currentTarget} \u2014 ${displayName} (${hLabel})`,
-               font: { size: 16, color: "#333" }, x: 0.01 },
+               font: { size: 16, color: dark ? "#ddd" : "#333" }, x: 0.01 },
       xaxis: {
         range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
-        ...PLOTLY_GRID, tickformat: "%Y", dtick: "M24",
+        ...plotlyGrid(), tickformat: "%Y", dtick: "M24",
+        spikecolor: dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)", spikethickness: 1,
       },
-      yaxis: { title: { text: displayName, standoff: 10 }, ...PLOTLY_GRID },
+      yaxis: { title: { text: displayName, standoff: 10 }, ...plotlyGrid() },
       legend: { orientation: "h", y: -0.15, x: 0.5, xanchor: "center",
-                font: { size: 12 }, bgcolor: "rgba(255,255,255,0)" },
+                font: { size: 12 }, bgcolor: "rgba(0,0,0,0)" },
       margin: { t: 40, r: 16, b: 70, l: 70 },
-      hovermode: "x unified", height: 500,
+      hovermode: "x unified", hoverlabel: { bgcolor: dark ? "#2e2e2e" : "#fff", font: { color: dark ? "#ddd" : "#333" } },
+      height: 500,
       plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
     };
 

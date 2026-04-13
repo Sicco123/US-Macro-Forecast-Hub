@@ -36,7 +36,8 @@
       "Bash(.venv/bin/mkdocs serve:*)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/)",
       "Bash(/opt/homebrew/bin/python3.10 src/models/generate_two_years.py)",
-      "Bash(ls model-output/MacroHub-RandomWalk/2024-* model-output/MacroHub-RandomWalk/2025-* model-output/MacroHub-RandomWalk/2026-0[123]*)"
+      "Bash(ls model-output/MacroHub-RandomWalk/2024-* model-output/MacroHub-RandomWalk/2025-* model-output/MacroHub-RandomWalk/2026-0[123]*)",
+      "Bash(/opt/homebrew/bin/python3.10 -c \"from joblib import Parallel; print\\('joblib OK'\\)\")"
     ]
   }
 }

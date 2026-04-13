@@ -13,8 +13,18 @@
     "#8d6e63", "#78909c",
   ];
 
-  const PLOTLY_FONT = { family: "Inter, system-ui, sans-serif", size: 13, color: "#444" };
-  const PLOTLY_GRID = { gridcolor: "rgba(0,0,0,0.06)", zerolinecolor: "rgba(0,0,0,0.1)" };
+  function isDark() {
+    return document.body.getAttribute("data-md-color-scheme") === "slate";
+  }
+  function plotlyFont() {
+    const c = isDark() ? "#ccc" : "#444";
+    return { family: "Inter, system-ui, sans-serif", size: 13, color: c };
+  }
+  function plotlyGrid() {
+    return isDark()
+      ? { gridcolor: "rgba(255,255,255,0.1)", zerolinecolor: "rgba(255,255,255,0.18)" }
+      : { gridcolor: "rgba(0,0,0,0.06)", zerolinecolor: "rgba(0,0,0,0.1)" };
+  }
   const PLOTLY_CONFIG = { responsive: true, displaylogo: false,
     modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"] };
 
@@ -116,6 +126,10 @@
       if (e.key === "ArrowLeft") stepSlider(-1);
       if (e.key === "ArrowRight") stepSlider(1);
     });
+
+    // Redraw charts when dark/light mode toggles
+    new MutationObserver(() => { draw(); drawScoreChart(); drawCumulativeChart(); })
+      .observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
 
     await onTargetChange();
   }
@@ -233,7 +247,7 @@
       });
       traces.push({
         x: xArr, y: yArr, mode: "lines", name: "Observed",
-        line: { color: "#37474f", width: 2.2 },
+        line: { color: isDark() ? "#b0bec5" : "#37474f", width: 2.2 },
         hovertemplate: "%{x|%b %Y}<br>Value: %{y:.2f}<extra>Observed</extra>",
       });
     }
@@ -271,33 +285,41 @@
       });
     });
 
+    const dark = isDark();
+    const originLineColor = dark ? "rgba(160,180,255,0.45)" : "rgba(63,81,181,0.35)";
+    const originTextColor = dark ? "rgba(160,180,255,0.8)" : "rgba(63,81,181,0.7)";
+    const titleColor = dark ? "#ddd" : "#333";
+    const spikeColor = dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)";
+
     const shapes = [{
       type: "line", x0: originDate, x1: originDate,
       y0: 0, y1: 1, yref: "paper",
-      line: { color: "rgba(63,81,181,0.35)", width: 1.5, dash: "dash" },
+      line: { color: originLineColor, width: 1.5, dash: "dash" },
     }];
     const annotations = [{
       x: originDate, y: 1, yref: "paper",
       text: "forecast origin", showarrow: false,
-      font: { size: 10, color: "rgba(63,81,181,0.7)" }, yanchor: "bottom",
+      font: { size: 10, color: originTextColor }, yanchor: "bottom",
     }];
 
     const layout = {
-      font: PLOTLY_FONT,
-      title: { text: currentTarget, font: { size: 16, color: "#333" }, x: 0.01 },
+      font: plotlyFont(),
+      title: { text: currentTarget, font: { size: 16, color: titleColor }, x: 0.01 },
       xaxis: {
         range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
-        ...PLOTLY_GRID, tickformat: "%Y", dtick: "M24",
+        ...plotlyGrid(), tickformat: "%Y", dtick: "M24",
+        spikecolor: spikeColor, spikethickness: 1,
       },
       yaxis: {
         title: { text: currentTarget, standoff: 10 },
-        range: yAxisRange, ...PLOTLY_GRID,
+        range: yAxisRange, ...plotlyGrid(),
       },
       shapes, annotations,
       legend: { orientation: "h", y: -0.12, x: 0.5, xanchor: "center",
-                font: { size: 12 }, bgcolor: "rgba(255,255,255,0)" },
+                font: { size: 12 }, bgcolor: "rgba(0,0,0,0)" },
       margin: { t: 40, r: 16, b: 60, l: 65 },
-      hovermode: "x unified", height: 500,
+      hovermode: "x unified", hoverlabel: { bgcolor: dark ? "#2e2e2e" : "#fff", font: { color: dark ? "#ddd" : "#333" } },
+      height: 500,
       plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
     };
 
@@ -372,18 +394,21 @@
       });
     });
 
+    const dark2 = isDark();
     const layout = {
-      font: PLOTLY_FONT,
-      title: { text: `${displayName} (12-month rolling avg)`, font: { size: 14, color: "#555" }, x: 0.01 },
+      font: plotlyFont(),
+      title: { text: `${displayName} (12-month rolling avg)`, font: { size: 14, color: dark2 ? "#ccc" : "#555" }, x: 0.01 },
       xaxis: {
         range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
-        ...PLOTLY_GRID, tickformat: "%Y", dtick: "M24",
+        ...plotlyGrid(), tickformat: "%Y", dtick: "M24",
+        spikecolor: dark2 ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)", spikethickness: 1,
       },
-      yaxis: { title: { text: displayName, standoff: 10 }, ...PLOTLY_GRID },
+      yaxis: { title: { text: displayName, standoff: 10 }, ...plotlyGrid() },
       legend: { orientation: "h", y: -0.18, x: 0.5, xanchor: "center",
-                font: { size: 12 }, bgcolor: "rgba(255,255,255,0)" },
+                font: { size: 12 }, bgcolor: "rgba(0,0,0,0)" },
       margin: { t: 36, r: 16, b: 70, l: 65 },
-      hovermode: "x unified", height: 340,
+      hovermode: "x unified", hoverlabel: { bgcolor: dark2 ? "#2e2e2e" : "#fff", font: { color: dark2 ? "#ddd" : "#333" } },
+      height: 340,
       plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
     };
 
@@ -449,18 +474,21 @@
       });
     });
 
+    const dark3 = isDark();
     const layout = {
-      font: PLOTLY_FONT,
-      title: { text: displayName, font: { size: 14, color: "#555" }, x: 0.01 },
+      font: plotlyFont(),
+      title: { text: displayName, font: { size: 14, color: dark3 ? "#ccc" : "#555" }, x: 0.01 },
       xaxis: {
         range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
-        ...PLOTLY_GRID, tickformat: "%Y", dtick: "M24",
+        ...plotlyGrid(), tickformat: "%Y", dtick: "M24",
+        spikecolor: dark3 ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)", spikethickness: 1,
       },
-      yaxis: { title: { text: displayName, standoff: 10 }, ...PLOTLY_GRID },
+      yaxis: { title: { text: displayName, standoff: 10 }, ...plotlyGrid() },
       legend: { orientation: "h", y: -0.18, x: 0.5, xanchor: "center",
-                font: { size: 12 }, bgcolor: "rgba(255,255,255,0)" },
+                font: { size: 12 }, bgcolor: "rgba(0,0,0,0)" },
       margin: { t: 36, r: 16, b: 70, l: 75 },
-      hovermode: "x unified", height: 340,
+      hovermode: "x unified", hoverlabel: { bgcolor: dark3 ? "#2e2e2e" : "#fff", font: { color: dark3 ? "#ddd" : "#333" } },
+      height: 340,
       plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
     };
 

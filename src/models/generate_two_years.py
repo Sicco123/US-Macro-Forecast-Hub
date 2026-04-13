@@ -1,14 +1,18 @@
 """
-Generate two years of monthly forecasts (April 2024 -- March 2026) for:
+Generate pseudo-real-time forecasts from 2000-01 to 2026-03 for all models.
+Each origin date produces 24-month-ahead forecasts (horizons 0--23).
+
+Models:
   - MacroHub-RandomWalk   (all 12 targets)
   - BASELINE-ARMA_BIC     (INDPRO, CPIAUCSL, PCEPI, UNRATE)
   - SBE_EDS-ARMA_BIC      (INDPRO, CPIAUCSL, PCEPI, UNRATE)
-  - MacroHub-Ensemble     (median across available models per target)
+  - MacroHub-Ensemble     (median across models per target)
 
-Speed optimisations:
-  - ARMA models estimated on last 10 years (120 obs) only
-  - Vectorised row generation (numpy broadcasting, no per-quantile loops)
-  - DataFrames pre-sliced per target; origin-date filtering via searchsorted
+Speed:
+  - ARMA on rolling 10-year (120 obs) window, re-selected every month
+  - CSS estimation for grid search (fast); MLE only for final forecast
+  - Vectorised quantile generation via scipy broadcasting
+  - Single process (no multiprocessing, safe on 16 GB machines)
 """
 
 import warnings
@@ -33,20 +37,27 @@ ALL_TARGETS = [
 ARMA_TARGETS = ["INDPRO", "CPIAUCSL", "PCEPI", "UNRATE"]
 
 QUANTILES = np.array([0.05, 0.1, 0.5, 0.9, 0.95])
-HORIZONS = [0, 1, 2, 3, 4]
-N_AHEAD = max(HORIZONS) + 1
+N_Q = len(QUANTILES)
+N_AHEAD = 24
 
 MAX_P = 6
 MAX_Q = 4
 MIN_HISTORY = 60
-MAX_HISTORY = 120  # 10 years of monthly data
+MAX_HISTORY = 120  # 10-year rolling window
 
 ORIGIN_DATES = [
     pd.Timestamp(y, m, 17)
-    for y in range(2024, 2027)
+    for y in range(2000, 2027)
     for m in range(1, 13)
-    if pd.Timestamp(2024, 4, 17) <= pd.Timestamp(y, m, 17) <= pd.Timestamp(2026, 3, 17)
+    if pd.Timestamp(y, m, 17) <= pd.Timestamp("2026-03-17")
 ]
+
+# Pre-build grid once
+GRID = [(p, q) for p in range(MAX_P + 1) for q in range(MAX_Q + 1)
+        if not (p == 0 and q == 0)]
+
+COLUMNS = ["origin_date", "target", "target_end_date", "horizon",
+           "location", "output_type", "output_type_id", "value"]
 
 
 def last_day_of_month(year: int, month: int) -> str:
@@ -57,27 +68,9 @@ def last_day_of_month(year: int, month: int) -> str:
     return (nxt - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
 
-def _make_rows(origin_str, target, ted, horizon, qvalues, mean_val):
-    """Build 6 rows (5 quantile + 1 mean) as a list of dicts, vectorised."""
-    base = {
-        "origin_date": origin_str, "target": target,
-        "target_end_date": ted, "horizon": horizon,
-        "location": "US",
-    }
-    rows = [
-        {**base, "output_type": "quantile", "output_type_id": float(q),
-         "value": round(float(v), 4)}
-        for q, v in zip(QUANTILES, qvalues)
-    ]
-    rows.append({**base, "output_type": "mean", "output_type_id": "",
-                 "value": round(float(mean_val), 4)})
-    return rows
-
-
-# ── Pre-process target data ────────────────────────────────────────────────
+# ── Pre-process ─────────────────────────────────────────────────────────────
 
 def prepare_target_series(target_df):
-    """Return dict: target -> (sorted dates array, sorted values array)."""
     out = {}
     for target in ALL_TARGETS:
         sdf = target_df[target_df["target"] == target].sort_values("truth_date")
@@ -86,9 +79,30 @@ def prepare_target_series(target_df):
 
 
 def slice_before(dates, values, origin_ts):
-    """Fast slice of observations before origin using searchsorted."""
     idx = np.searchsorted(dates, origin_ts, side="left")
     return values[:idx], dates[:idx]
+
+
+def _target_end_dates(last_date):
+    out = []
+    for h in range(N_AHEAD):
+        tm = last_date + pd.DateOffset(months=h + 1)
+        out.append(last_day_of_month(tm.year, tm.month))
+    return out
+
+
+# ── Row builder (tuple-based, fast) ────────────────────────────────────────
+
+def _build_rows(origin_str, target, teds, qval_matrix, mean_arr):
+    rows = []
+    for h in range(N_AHEAD):
+        ted = teds[h]
+        mv = round(float(mean_arr[h]), 4)
+        for qi in range(N_Q):
+            rows.append((origin_str, target, ted, h, "US", "quantile",
+                         float(QUANTILES[qi]), round(float(qval_matrix[h, qi]), 4)))
+        rows.append((origin_str, target, ted, h, "US", "mean", "", mv))
+    return rows
 
 
 # ── Random Walk ─────────────────────────────────────────────────────────────
@@ -105,27 +119,24 @@ def generate_rw(series_dict, origin_str, targets):
 
         last_val = vals[-1]
         last_date = pd.Timestamp(dts[-1])
+        teds = _target_end_dates(last_date)
 
-        for horizon in HORIZONS:
-            tm = last_date + pd.DateOffset(months=horizon + 1)
-            ted = last_day_of_month(tm.year, tm.month)
-
-            h = max(horizon, 1)
-            if len(vals) > h:
-                errors = vals[h:] - vals[:-h]
+        qval_matrix = np.empty((N_AHEAD, N_Q))
+        for h in range(N_AHEAD):
+            hh = max(h, 1)
+            if len(vals) > hh:
+                errors = vals[hh:] - vals[:-hh]
                 errors = errors[np.isfinite(errors)]
             else:
                 errors = np.array([0.0])
-
             if len(errors) < 24:
                 e1 = vals[1:] - vals[:-1]
                 e1 = e1[np.isfinite(e1)]
-                errors = e1 * np.sqrt(h) if len(e1) > 0 else np.array([0.0])
+                errors = e1 * np.sqrt(hh) if len(e1) > 0 else np.array([0.0])
+            qval_matrix[h] = last_val + np.quantile(errors, QUANTILES)
 
-            # Vectorised quantile computation
-            q_errors = np.quantile(errors, QUANTILES) if len(errors) > 0 else np.zeros(len(QUANTILES))
-            qvalues = last_val + q_errors
-            all_rows.extend(_make_rows(origin_str, target, ted, horizon, qvalues, last_val))
+        all_rows.extend(_build_rows(
+            origin_str, target, teds, qval_matrix, np.full(N_AHEAD, last_val)))
 
     return all_rows
 
@@ -139,39 +150,23 @@ def _standardize(s):
     return (s - mu) / sigma, mu, sigma
 
 
-def select_arma_order(series):
-    """BIC grid search on last MAX_HISTORY observations."""
-    series = series[-MAX_HISTORY:]
-    z, _, _ = _standardize(series)
+def select_arma_order(z):
+    """BIC grid search using CSS estimation (fast)."""
     best_bic, best_order = np.inf, (1, 0)
-    for p in range(MAX_P + 1):
-        for q in range(MAX_Q + 1):
-            if p == 0 and q == 0:
-                continue
-            try:
-                res = ARIMA(z, order=(p, 0, q)).fit(method_kwargs={"maxiter": 200})
-                if res.bic < best_bic:
-                    best_bic = res.bic
-                    best_order = (p, q)
-            except Exception:
-                continue
+    for p, q in GRID:
+        try:
+            res = ARIMA(z, order=(p, 0, q)).fit(method="css",
+                                                 method_kwargs={"maxiter": 100})
+            if res.bic < best_bic:
+                best_bic = res.bic
+                best_order = (p, q)
+        except Exception:
+            continue
     return best_order
 
 
-def forecast_arma(series, p, q):
-    """Fit on last MAX_HISTORY obs, return (point[N_AHEAD], std[N_AHEAD])."""
-    series = series[-MAX_HISTORY:]
-    z, mu, sigma = _standardize(series)
-    res = ARIMA(z, order=(p, 0, q)).fit(method_kwargs={"maxiter": 200})
-    fc = res.get_forecast(steps=N_AHEAD)
-    point = np.array(fc.predicted_mean) * sigma + mu
-    std = np.array(fc.se_mean) * sigma
-    return point, std
-
-
-def generate_arma(series_dict, origin_str, targets, cache, last_yr):
+def generate_arma(series_dict, origin_str, targets):
     origin_ts = np.datetime64(origin_str)
-    origin_pd = pd.Timestamp(origin_str)
     all_rows = []
 
     for target in targets:
@@ -181,28 +176,55 @@ def generate_arma(series_dict, origin_str, targets, cache, last_yr):
             continue
 
         last_date = pd.Timestamp(dts[-1])
+        teds = _target_end_dates(last_date)
 
-        # Re-select order once per year
-        if target not in cache or origin_pd.year != last_yr.get(target):
-            cache[target] = select_arma_order(vals)
-            last_yr[target] = origin_pd.year
+        # Rolling 10-year window, standardize once
+        window = vals[-MAX_HISTORY:]
+        z, mu, sigma = _standardize(window)
 
-        p, q = cache[target]
+        # Fast CSS grid search
+        p, q = select_arma_order(z)
+
+        # Final forecast with MLE for proper uncertainty
         try:
-            pt, st = forecast_arma(vals, p, q)
+            res = ARIMA(z, order=(p, 0, q)).fit(method_kwargs={"maxiter": 200})
+            fc = res.get_forecast(steps=N_AHEAD)
+            pt = np.array(fc.predicted_mean) * sigma + mu
+            st = np.array(fc.se_mean) * sigma
         except Exception:
             continue
 
-        # Vectorised: compute all quantiles for all horizons at once
-        # pt[h], st[h] -> quantiles via ppf
-        for horizon in HORIZONS:
-            tm = last_date + pd.DateOffset(months=horizon + 1)
-            ted = last_day_of_month(tm.year, tm.month)
-            mu_h, sigma_h = pt[horizon], st[horizon]
-            qvalues = stats.norm.ppf(QUANTILES, loc=mu_h, scale=sigma_h)
-            all_rows.extend(_make_rows(origin_str, target, ted, horizon, qvalues, mu_h))
+        # Vectorised quantiles: (N_AHEAD,1) x (1,N_Q) -> (N_AHEAD, N_Q)
+        qval_matrix = stats.norm.ppf(
+            QUANTILES[np.newaxis, :],
+            loc=pt[:, np.newaxis],
+            scale=st[:, np.newaxis],
+        )
+        all_rows.extend(_build_rows(origin_str, target, teds, qval_matrix, pt))
 
     return all_rows
+
+
+# ── Process one origin date ────────────────────────────────────────────────
+
+def process_origin(series_dict, origin, rw_dir, bl_dir, sbe_dir):
+    """Process a single origin date: RW + ARMA, save CSVs."""
+    ds = origin.strftime("%Y-%m-%d")
+
+    # Random Walk (all 12 targets)
+    rw_rows = generate_rw(series_dict, ds, ALL_TARGETS)
+    if rw_rows:
+        pd.DataFrame(rw_rows, columns=COLUMNS).to_csv(
+            rw_dir / f"{ds}-MacroHub-RandomWalk.csv", index=False)
+
+    # ARMA (4 targets) — compute once, save for both BASELINE and SBE_EDS
+    arma_rows = generate_arma(series_dict, ds, ARMA_TARGETS)
+    if arma_rows:
+        df = pd.DataFrame(arma_rows, columns=COLUMNS)
+        df.to_csv(bl_dir / f"{ds}-BASELINE-ARMA_BIC.csv", index=False)
+        df.to_csv(sbe_dir / f"{ds}-SBE_EDS-ARMA_BIC.csv", index=False)
+
+    return ds
 
 
 # ── Ensemble ────────────────────────────────────────────────────────────────
@@ -220,65 +242,57 @@ def generate_ensemble(origin_str):
             except Exception:
                 pass
     if not dfs:
-        return []
+        return None
 
     combined = pd.concat(dfs, ignore_index=True)
     gcols = ["origin_date", "target", "target_end_date", "horizon",
              "location", "output_type", "output_type_id"]
-    rows = []
-    for key, g in combined.groupby(gcols):
-        if g["_model"].nunique() < 2:
-            continue
-        rec = dict(zip(gcols, key))
-        rec["value"] = round(float(g["value"].astype(float).median()), 4)
-        rows.append(rec)
-    return rows
+
+    agg = combined.groupby(gcols).agg(
+        value=("value", lambda x: round(float(x.astype(float).median()), 4)),
+        n=("_model", "nunique"),
+    ).reset_index()
+    agg = agg[agg["n"] >= 2].drop(columns="n")
+    return agg if len(agg) > 0 else None
+
+
+def save_df(df, out_dir, origin_str, model_name):
+    if df is not None:
+        df.to_csv(out_dir / f"{origin_str}-{model_name}.csv", index=False)
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
 
-def save(rows, out_dir, origin_str, model_name):
-    if rows:
-        out_dir.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame(rows).to_csv(
-            out_dir / f"{origin_str}-{model_name}.csv", index=False
-        )
-
-
 def main():
     target_df = pd.read_csv(TARGET_DATA_PATH)
     target_df["truth_date"] = pd.to_datetime(target_df["truth_date"])
-
-    # Pre-process once
     series_dict = prepare_target_series(target_df)
 
     rw_dir = MODEL_OUTPUT_DIR / "MacroHub-RandomWalk"
-    baseline_arma_dir = MODEL_OUTPUT_DIR / "BASELINE-ARMA_BIC"
+    bl_dir = MODEL_OUTPUT_DIR / "BASELINE-ARMA_BIC"
     sbe_dir = MODEL_OUTPUT_DIR / "SBE_EDS-ARMA_BIC"
     ens_dir = MODEL_OUTPUT_DIR / "MacroHub-Ensemble"
 
+    # Create output directories upfront
+    for d in [rw_dir, bl_dir, sbe_dir, ens_dir]:
+        d.mkdir(parents=True, exist_ok=True)
+
     total = len(ORIGIN_DATES)
-    bl_cache, bl_yr = {}, {}
-    sbe_cache, sbe_yr = {}, {}
+    print(f"Phase 1: Generating {total} origin dates × 24-month horizons (single process)...")
 
-    print(f"Generating {total} monthly origin dates for all models...")
+    # Phase 1: RW + ARMA sequentially
+    for idx, origin in enumerate(ORIGIN_DATES):
+        ds = process_origin(series_dict, origin, rw_dir, bl_dir, sbe_dir)
+        print(f"\r  [{idx+1}/{total}] {ds}", end="", flush=True)
 
+    # Phase 2: Ensemble (reads files written in phase 1)
+    print(f"\nPhase 2: Generating ensembles for {total} origin dates...")
     for idx, origin in enumerate(ORIGIN_DATES):
         ds = origin.strftime("%Y-%m-%d")
-        print(f"[{idx+1}/{total}] {ds}", flush=True)
+        print(f"\r  Ensemble [{idx+1}/{total}] {ds}", end="", flush=True)
+        save_df(generate_ensemble(ds), ens_dir, ds, "MacroHub-Ensemble")
 
-        save(generate_rw(series_dict, ds, ALL_TARGETS),
-             rw_dir, ds, "MacroHub-RandomWalk")
-
-        save(generate_arma(series_dict, ds, ARMA_TARGETS, bl_cache, bl_yr),
-             baseline_arma_dir, ds, "BASELINE-ARMA_BIC")
-
-        save(generate_arma(series_dict, ds, ARMA_TARGETS, sbe_cache, sbe_yr),
-             sbe_dir, ds, "SBE_EDS-ARMA_BIC")
-
-        save(generate_ensemble(ds), ens_dir, ds, "MacroHub-Ensemble")
-
-    print("Done!")
+    print("\nDone!")
 
 
 if __name__ == "__main__":

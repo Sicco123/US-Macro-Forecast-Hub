@@ -29,7 +29,7 @@ TARGETS = ["INDPRO", "CPIAUCSL", "PCEPI", "UNRATE"]
 
 REQUIRED_QUANTILES = [0.05, 0.1, 0.5, 0.9, 0.95]
 
-HORIZONS = [0, 1, 2, 3, 4]
+HORIZONS = list(range(24))  # 0..23
 MAX_P = 6
 MAX_Q = 4
 MIN_HISTORY = 60  # minimum months of history required
