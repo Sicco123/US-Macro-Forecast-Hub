@@ -87,19 +87,30 @@ def forecast_arima(
 
 
 def rw_forecast_with_errors(
-    work: np.ndarray, n_ahead: int, min_err_hist: int = 24
+    work: np.ndarray, n_ahead: int, min_err_hist: int = 24, diffed: bool = False
 ) -> tuple[float, np.ndarray]:
     """
-    Random walk in the provided (possibly pre-differenced) series space.
-    Point forecast = last observed value.
-    Quantile errors from empirical h-step errors in that space.
+    Naive forecast in the provided series space.
+    Levels (diffed=False): point = last observed value (classic random walk).
+    Changes (diffed=True): point = mean of last 12 changes (Atkeson–Ohanian);
+      carrying one noisy month forward is a terrible inflation forecast.
+    Quantile errors from empirical h-step errors of the rule used.
     Returns (point, error_quantiles) for each horizon.
     """
-    last_val = work[-1]
+    W = 12
+    if diffed:
+        roll = np.convolve(work, np.ones(W) / W, "valid")
+        last_val = roll[-1]
+    else:
+        last_val = work[-1]
     err_quantiles = []
 
     for h in range(1, n_ahead + 1):
-        if len(work) > h:
+        if diffed:
+            actual = work[W - 1 + h:]
+            errors = actual - roll[:len(actual)]
+            errors = errors[np.isfinite(errors)]
+        elif len(work) > h:
             errors = work[h:] - work[:-h]
             errors = errors[np.isfinite(errors)]
         else:
