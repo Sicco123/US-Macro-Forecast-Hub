@@ -46,10 +46,20 @@ transformed to achieve stationarity:
 | 6 | Log second difference: $\Delta^2 \log(x_t)$ |
 | 7 | Percent change: $\Delta(x_t/x_{t-1} - 1)$ |
 
-!!! info "Forecasts are in levels"
-    The hub collects forecasts in the **original units** (levels) of each
-    series, not in transformed form. Participants may use any transformation
-    internally but must convert back to levels for submission.
+!!! info "Forecast and scoring space"
+    The hub scores forecasts in a **transformed space** that targets stationarity.
+    Participants must submit forecasts already in the transformed units:
+
+    | Target | Required transformation |
+    |--------|------------------------|
+    | INDPRO | Δlog(x) — monthly log change |
+    | CPIAUCSL | Δlog(x) — monthly log change |
+    | PCEPI | Δlog(x) — monthly log change |
+    | UNRATE | Δx — monthly first difference (pp) |
+    | Others | Levels (no transformation) |
+
+    Internally, models may use any representation, but submitted `value` fields
+    for the scored targets must be in the transformed units listed above.
 
 ---
 

@@ -5,6 +5,24 @@ models, and time range, then use the slider to browse forecasts at each origin
 date. Click on the chart to jump to the nearest origin date. Shaded bands show
 the 80% and 90% prediction intervals.
 
+**Tips:** press ++arrow-left++ / ++arrow-right++ to step through origin dates,
+++space++ to auto-play, and share the URL to link directly to the selected
+target.
+
+!!! note "Transformed scale"
+    All forecasts — and the **Observed** series — are shown in the **transformed
+    space** used for scoring:
+
+    | Target | Transformation | Interpretation |
+    |--------|---------------|----------------|
+    | INDPRO | Δlog(x) | Monthly log change ≈ monthly % change / 100 |
+    | CPIAUCSL | Δlog(x) | Monthly log change |
+    | PCEPI | Δlog(x) | Monthly log change |
+    | UNRATE | Δx | Monthly change in percentage points |
+
+    Values near **zero** mean little-to-no change; positive values indicate
+    growth / increase; negative values indicate contraction / decrease.
+
 <div id="fc-dashboard" markdown="0">
 
 <div class="dash-controls">
@@ -19,11 +37,7 @@ the 80% and 90% prediction intervals.
   <label>Metric
     <select id="fc-metric">
       <option value="MAE">MAE</option>
-      <option value="WIS">WIS</option>
       <option value="SqErr">RMSE</option>
-      <option value="MeanQS">MeanQS</option>
-      <option value="Coverage_80">Coverage 80%</option>
-      <option value="Coverage_90">Coverage 90%</option>
     </select>
   </label>
   <label>From
@@ -32,11 +46,41 @@ the 80% and 90% prediction intervals.
   <label>To
     <input type="number" id="fc-year-to" value="2026" min="2000" max="2026">
   </label>
+  <label>Max Horizon
+    <select id="fc-max-horizon">
+      <option value="1">1 month</option>
+      <option value="2">2 months</option>
+      <option value="3">3 months</option>
+      <option value="4">4 months</option>
+      <option value="5">5 months</option>
+      <option value="6">6 months</option>
+      <option value="7">7 months</option>
+      <option value="8">8 months</option>
+      <option value="9">9 months</option>
+      <option value="10">10 months</option>
+      <option value="11">11 months</option>
+      <option value="12">12 months</option>
+      <option value="13">13 months</option>
+      <option value="14">14 months</option>
+      <option value="15">15 months</option>
+      <option value="16">16 months</option>
+      <option value="17">17 months</option>
+      <option value="18">18 months</option>
+      <option value="19">19 months</option>
+      <option value="20">20 months</option>
+      <option value="21">21 months</option>
+      <option value="22">22 months</option>
+      <option value="23">23 months</option>
+      <option value="24" selected>24 months</option>
+    </select>
+  </label>
+  <button id="fc-reset-zoom" class="dash-btn" title="Reset zoom to full range">&#x21ba; Reset Zoom</button>
 </div>
 
 <div class="dash-models" id="fc-models">Loading models...</div>
 
 <div class="dash-slider-row">
+  <button id="fc-play" title="Play through origin dates (Space)">&#9654;</button>
   <button id="fc-prev" title="Previous origin date">&larr;</button>
   <input type="range" id="fc-slider" min="0" max="0" value="0">
   <button id="fc-next" title="Next origin date">&rarr;</button>
@@ -62,4 +106,4 @@ the 80% and 90% prediction intervals.
 | `location` | `US` |
 | `output_type` | `quantile` or `mean` |
 | `output_type_id` | Quantile level (0.05, 0.1, 0.5, 0.9, 0.95) or empty for mean |
-| `value` | Forecast value in original units (levels) |
+| `value` | Forecast value in transformed units (Δlog for INDPRO/CPIAUCSL/PCEPI; Δ for UNRATE) |

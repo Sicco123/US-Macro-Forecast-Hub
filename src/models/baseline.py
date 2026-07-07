@@ -2,9 +2,14 @@
 Generate baseline (random walk) forecasts for the Macro Forecast Hub.
 
 The baseline model produces:
-  - Point forecast: last observed value (no-change forecast)
+  - Point forecast: last observed value in comparison space
   - Quantile forecasts: derived from the empirical distribution of historical
     forecast errors at each horizon
+
+Comparison space (forecasts and truth evaluated in same transformed scale):
+  INDPRO, CPIAUCSL, PCEPI → Δlog(x)  monthly log difference
+  UNRATE                  → Δx       monthly first difference
+  all others              → level (unchanged)
 
 This serves as the standard benchmark for evaluating all other models.
 """
@@ -26,6 +31,10 @@ TARGETS = [
     "FEDFUNDS", "GS10", "TB3MS", "HOUST", "M2SL",
     "DPCERA3M086SBEA", "RETAILx",
 ]
+
+# Targets evaluated in log-diff or diff space
+LOG_DIFF_TARGETS = {"INDPRO", "CPIAUCSL", "PCEPI"}
+DIFF_TARGETS = {"UNRATE"}
 
 HORIZONS = list(range(24))  # 0..23
 
@@ -77,27 +86,35 @@ def generate_baseline_forecast(target_df: pd.DataFrame, origin_date: str) -> lis
         if len(series_df) < MIN_HISTORY:
             continue
 
-        last_value = series_df["value"].iloc[-1]
         last_date = series_df["truth_date"].iloc[-1]
-        values = series_df["value"].values
+        raw_values = series_df["value"].values.astype(float)
+
+        # Transform to comparison space for the four key targets
+        if target in LOG_DIFF_TARGETS:
+            if np.any(raw_values <= 0):
+                continue
+            work = np.diff(np.log(raw_values))   # monthly log differences
+        elif target in DIFF_TARGETS:
+            work = np.diff(raw_values)            # monthly first differences
+        else:
+            work = raw_values                     # levels (all other targets)
+
+        last_value = work[-1]
 
         for horizon in HORIZONS:
-            # Target end date: h months after the last observed month
             target_month = last_date + pd.DateOffset(months=horizon + 1)
             target_end_date = last_day_of_month(target_month.year, target_month.month)
 
-            # Point forecast = last value (random walk)
+            # Point forecast = last observed value in comparison space
             point_forecast = last_value
 
-            # Compute error distribution for this horizon
-            h = max(horizon, 1)  # use at least 1-step errors for h=0
-            errors = compute_historical_errors(values, h)
+            # Compute error distribution for this horizon in comparison space
+            h = max(horizon, 1)
+            errors = compute_historical_errors(work, h)
 
             if len(errors) < MIN_HISTORY:
-                # Fall back to wider distribution if not enough history
-                errors = compute_historical_errors(values, 1)
+                errors = compute_historical_errors(work, 1)
                 if horizon > 1:
-                    # Scale errors by sqrt(horizon) as approximation
                     errors = errors * np.sqrt(horizon)
 
             # Generate quantile forecasts
@@ -119,7 +136,6 @@ def generate_baseline_forecast(target_df: pd.DataFrame, origin_date: str) -> lis
                     "value": round(q_value, 4),
                 })
 
-            # Add mean
             records.append({
                 "origin_date": origin_date,
                 "target": target,

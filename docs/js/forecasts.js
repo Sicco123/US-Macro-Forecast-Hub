@@ -9,7 +9,7 @@
 
   const COLORS = [
     "#3f51b5", "#ff7043", "#26a69a", "#ab47bc",
-    "#5c6bc0", "#ffa726", "#ef5350", "#66bb6a",
+    "#e65100", "#ffa726", "#ef5350", "#66bb6a",
     "#8d6e63", "#78909c",
   ];
 
@@ -26,7 +26,7 @@
       : { gridcolor: "rgba(0,0,0,0.06)", zerolinecolor: "rgba(0,0,0,0.1)" };
   }
   const PLOTLY_CONFIG = { responsive: true, displaylogo: false,
-    modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"] };
+    modeBarButtonsToRemove: ["lasso2d", "select2d"] };
 
   let truthData = {};
   let fcData = null;
@@ -35,10 +35,13 @@
   let originDates = [];
   let sliderIndex = 0;
   let selectedModels = new Set();
+  let modelColorMap = {};          // stable model → color mapping
   let yAxisRange = null;
+  let maxHorizon = 24;
 
   const selTarget = ROOT.querySelector("#fc-target");
   const selMetric = ROOT.querySelector("#fc-metric");
+  const selMaxHorizon = ROOT.querySelector("#fc-max-horizon");
   const modelBox = ROOT.querySelector("#fc-models");
   const yearFrom = ROOT.querySelector("#fc-year-from");
   const yearTo = ROOT.querySelector("#fc-year-to");
@@ -46,9 +49,11 @@
   const sliderLabel = ROOT.querySelector("#fc-slider-label");
   const btnPrev = ROOT.querySelector("#fc-prev");
   const btnNext = ROOT.querySelector("#fc-next");
+  const btnPlay = ROOT.querySelector("#fc-play");
   const chartDiv = ROOT.querySelector("#fc-chart");
   const scoreChartDiv = ROOT.querySelector("#fc-score-chart");
   const cumChartDiv = ROOT.querySelector("#fc-cumulative-chart");
+  const btnResetZoom = ROOT.querySelector("#fc-reset-zoom");
 
   function basePath() {
     const scripts = document.querySelectorAll("script[src]");
@@ -70,33 +75,102 @@
     return `rgba(${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)},${a})`;
   }
 
+  // Return the transformed values array for a target (or levels if no transform)
+  function truthDisplayValues(t) {
+    return (t && t.transformed_values) ? t.transformed_values : (t ? t.values : []);
+  }
+
+  // Human-readable label for the y-axis given a target's transform type
+  function yAxisLabel(target) {
+    const t = truthData[target];
+    if (!t) return target;
+    if (t.transform === "log_diff") return `\u0394log(${target})`;
+    if (t.transform === "diff") return `\u0394${target} (pp)`;
+    return target;
+  }
+
+  // Chart title suffix describing the transformation
+  function transformSuffix(target) {
+    const t = truthData[target];
+    if (!t) return "";
+    if (t.transform === "log_diff") return " \u2014 monthly log change";
+    if (t.transform === "diff") return " \u2014 monthly change (pp)";
+    return "";
+  }
+
   function computeYRange() {
     const yFrom = parseInt(yearFrom.value) || 2000;
     const yTo = parseInt(yearTo.value) || 2026;
-    let yMin = Infinity, yMax = -Infinity;
+    const allVals = [];
+
+    // Collect observed (transformed) values in the visible date window
     const t = truthData[currentTarget];
     if (t) {
+      const displayVals = truthDisplayValues(t);
       t.dates.forEach((d, i) => {
         const y = parseInt(d.slice(0, 4));
-        if (y >= yFrom && y <= yTo + 1 && t.values[i] != null) {
-          yMin = Math.min(yMin, t.values[i]);
-          yMax = Math.max(yMax, t.values[i]);
+        if (y >= yFrom && y <= yTo + 1 && displayVals[i] != null) {
+          allVals.push(displayVals[i]);
         }
       });
     }
+    // Collect forecast envelope (q005 / q095) only for the currently selected
+    // models so level-space outliers from stale files can't blow the axis out
     if (fcData) {
       for (const model of Object.keys(fcData.models)) {
+        if (!selectedModels.has(model)) continue;
         for (const od of originDates) {
           const e = fcData.models[model][od];
           if (!e) continue;
-          for (const v of (e.q005 || [])) if (v != null) { yMin = Math.min(yMin, v); yMax = Math.max(yMax, v); }
-          for (const v of (e.q095 || [])) if (v != null) { yMin = Math.min(yMin, v); yMax = Math.max(yMax, v); }
+          for (const v of (e.q005 || [])) if (v != null) allVals.push(v);
+          for (const v of (e.q095 || [])) if (v != null) allVals.push(v);
         }
       }
     }
-    if (!isFinite(yMin)) return null;
-    const pad = (yMax - yMin) * 0.08;
-    return [yMin - pad, yMax + pad];
+    if (allVals.length === 0) return null;
+
+    // Clip to 1st–99th percentile so stale level-space values don't dominate
+    allVals.sort((a, b) => a - b);
+    const lo = allVals[Math.max(0, Math.floor(allVals.length * 0.01))];
+    const hi = allVals[Math.min(allVals.length - 1, Math.floor(allVals.length * 0.99))];
+    const pad = (hi - lo) * 0.08;
+    return [lo - pad, hi + pad];
+  }
+
+  // --- play-through animation over origin dates ---
+  let playTimer = null;
+  function stopPlay() {
+    if (!playTimer) return;
+    clearInterval(playTimer);
+    playTimer = null;
+    if (btnPlay) { btnPlay.innerHTML = "&#9654;"; btnPlay.title = "Play through origin dates"; }
+  }
+  function togglePlay() {
+    if (playTimer) { stopPlay(); return; }
+    if (sliderIndex >= originDates.length - 1) {
+      sliderIndex = 0; slider.value = 0; updateSliderLabel(); draw();
+    }
+    btnPlay.innerHTML = "&#10074;&#10074;";
+    btnPlay.title = "Pause";
+    playTimer = setInterval(() => {
+      if (sliderIndex >= originDates.length - 1) { stopPlay(); return; }
+      stepSlider(1);
+    }, 650);
+  }
+
+  // --- loading / empty states ---
+  function setLoading(on) {
+    [chartDiv, scoreChartDiv, cumChartDiv].forEach((d) =>
+      d.classList.toggle("dash-chart--loading", on));
+  }
+
+  // --- shareable state: persist target in the URL hash ---
+  function readHash() {
+    const t = new URLSearchParams(location.hash.slice(1)).get("target");
+    if (t && [...selTarget.options].some((o) => o.value === t)) selTarget.value = t;
+  }
+  function writeHash() {
+    history.replaceState(null, "", "#target=" + currentTarget);
   }
 
   // Find the closest origin date index to a given date string
@@ -115,29 +189,48 @@
 
     selTarget.addEventListener("change", onTargetChange);
     selMetric.addEventListener("change", () => { drawScoreChart(); drawCumulativeChart(); });
+    selMaxHorizon.addEventListener("change", () => {
+      maxHorizon = parseInt(selMaxHorizon.value);
+      draw(); drawScoreChart(); drawCumulativeChart();
+    });
     yearFrom.addEventListener("change", onRangeChange);
     yearTo.addEventListener("change", onRangeChange);
     slider.addEventListener("input", onSliderMove);
     btnPrev.addEventListener("click", () => stepSlider(-1));
     btnNext.addEventListener("click", () => stepSlider(1));
+    if (btnPlay) btnPlay.addEventListener("click", togglePlay);
+    if (btnResetZoom) btnResetZoom.addEventListener("click", resetZoom);
 
     document.addEventListener("keydown", (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
       if (e.key === "ArrowLeft") stepSlider(-1);
       if (e.key === "ArrowRight") stepSlider(1);
+      if (e.key === " " && btnPlay) { e.preventDefault(); togglePlay(); }
     });
 
     // Redraw charts when dark/light mode toggles
     new MutationObserver(() => { draw(); drawScoreChart(); drawCumulativeChart(); })
       .observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
 
+    readHash();
     await onTargetChange();
   }
 
   async function onTargetChange() {
+    stopPlay();
     currentTarget = selTarget.value;
+    writeHash();
+    setLoading(true);
     try { fcData = await fetchJSON(DATA_BASE + `forecasts_${currentTarget}.json`); } catch { fcData = null; }
     try { scoresData = await fetchJSON(DATA_BASE + `scores_${currentTarget}.json`); } catch { scoresData = null; }
+    setLoading(false);
+    if (!fcData) {
+      modelBox.innerHTML = "";
+      chartDiv.innerHTML =
+        `<div class="dash-empty">No forecast data available for ${currentTarget} yet.</div>`;
+      Plotly.purge(scoreChartDiv); Plotly.purge(cumChartDiv);
+      return;
+    }
     buildModelCheckboxes();
     updateSlider();
     yAxisRange = computeYRange();
@@ -148,13 +241,16 @@
 
   function buildModelCheckboxes() {
     if (!fcData) return;
-    const models = Object.keys(fcData.models);
+    const models = Object.keys(fcData.models).sort();
     selectedModels = new Set(models);
+    // Stable color map: sorted order determines color, never changes on selection
+    modelColorMap = {};
+    models.forEach((m, i) => { modelColorMap[m] = COLORS[i % COLORS.length]; });
     modelBox.innerHTML = models
-      .map((m, i) => {
-        const c = COLORS[i % COLORS.length];
+      .map((m) => {
+        const c = modelColorMap[m];
         return `<label><input type="checkbox" value="${m}" checked
-                 style="accent-color:${c}"> ${m}</label>`;
+                 style="accent-color:${c}"> <span style="color:${c}; font-weight:600">●</span> ${m}</label>`;
       })
       .join("");
     modelBox.querySelectorAll("input").forEach((cb) => {
@@ -181,6 +277,13 @@
     updateSliderLabel();
   }
 
+  function resetZoom() {
+    // Reset year inputs to full range and redraw all charts from scratch
+    yearFrom.value = 2000;
+    yearTo.value = 2026;
+    onRangeChange();
+  }
+
   function onRangeChange() {
     updateSlider();
     yAxisRange = computeYRange();
@@ -188,6 +291,7 @@
   }
 
   function onSliderMove() {
+    stopPlay();  // manual drag takes over from autoplay
     sliderIndex = parseInt(slider.value);
     updateSliderLabel();
     draw();
@@ -239,44 +343,49 @@
       const endLimit = new Date(yTo + 1, 0, 1);
       const startLimit = new Date(yFrom, 0, 1);
       const xArr = [], yArr = [];
+      const displayVals = truthDisplayValues(t);
+      const decimals = (t.transform === "log_diff" || t.transform === "diff") ? 4 : 2;
       t.dates.forEach((d, i) => {
         const dt = new Date(d);
-        if (dt >= startLimit && dt <= endLimit && t.values[i] != null) {
-          xArr.push(d); yArr.push(t.values[i]);
+        if (dt >= startLimit && dt <= endLimit && displayVals[i] != null) {
+          xArr.push(d); yArr.push(displayVals[i]);
         }
       });
       traces.push({
         x: xArr, y: yArr, mode: "lines", name: "Observed",
         line: { color: isDark() ? "#b0bec5" : "#37474f", width: 2.2 },
-        hovertemplate: "%{x|%b %Y}<br>Value: %{y:.2f}<extra>Observed</extra>",
+        hovertemplate: `%{x|%b %Y}<br>Value: %{y:.${decimals}f}<extra>Observed</extra>`,
       });
     }
 
-    const models = Object.keys(fcData.models).filter((m) => selectedModels.has(m));
-    models.forEach((model, mi) => {
-      const color = COLORS[mi % COLORS.length];
+    const models = Object.keys(fcData.models).sort().filter((m) => selectedModels.has(m));
+    models.forEach((model) => {
+      const color = modelColorMap[model];
       const entry = fcData.models[model][originDate];
       if (!entry) return;
-      const teds = entry.ted;
+      const teds = entry.ted.slice(0, maxHorizon);
+      const sl = (arr) => arr ? arr.slice(0, maxHorizon) : null;
 
       if (entry.q005 && entry.q095) {
+        const lo = sl(entry.q005), hi = sl(entry.q095);
         traces.push({
           x: teds.concat([...teds].reverse()),
-          y: entry.q005.concat([...entry.q095].reverse()),
+          y: lo.concat([...hi].reverse()),
           fill: "toself", fillcolor: hexToRgba(color, 0.12),
           line: { color: "transparent" }, showlegend: false, hoverinfo: "skip",
         });
       }
       if (entry.q010 && entry.q090) {
+        const lo = sl(entry.q010), hi = sl(entry.q090);
         traces.push({
           x: teds.concat([...teds].reverse()),
-          y: entry.q010.concat([...entry.q090].reverse()),
+          y: lo.concat([...hi].reverse()),
           fill: "toself", fillcolor: hexToRgba(color, 0.25),
           line: { color: "transparent" }, showlegend: false, hoverinfo: "skip",
         });
       }
       // Point forecast: show mean (falling back to Q0.5 if mean unavailable)
-      const pointY = entry.mean || entry.q050;
+      const pointY = sl(entry.mean || entry.q050);
       traces.push({
         x: teds, y: pointY, mode: "lines+markers", name: model,
         line: { color: color, width: 2.8 },
@@ -304,14 +413,14 @@
 
     const layout = {
       font: plotlyFont(),
-      title: { text: currentTarget, font: { size: 16, color: titleColor }, x: 0.01 },
+      title: { text: currentTarget + transformSuffix(currentTarget), font: { size: 16, color: titleColor }, x: 0.01 },
       xaxis: {
         range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
-        ...plotlyGrid(), tickformat: "%Y", dtick: "M24",
+        ...plotlyGrid(), tickformat: "%Y",
         spikecolor: spikeColor, spikethickness: 1,
       },
       yaxis: {
-        title: { text: currentTarget, standoff: 10 },
+        title: { text: yAxisLabel(currentTarget), standoff: 10 },
         range: yAxisRange, ...plotlyGrid(),
       },
       shapes, annotations,
@@ -341,7 +450,7 @@
     });
   }
 
-  // --- score chart (rolling metric) ---
+  // --- score chart (rolling metric) — single horizon only (maxHorizon) ---
   function drawScoreChart() {
     if (!scoresData || originDates.length === 0) { Plotly.purge(scoreChartDiv); return; }
 
@@ -349,32 +458,25 @@
     const isRMSE = metricKey === "SqErr";
     const displayName = isRMSE ? "RMSE" : metricKey;
 
-    const models = Object.keys(scoresData.models).filter((m) => selectedModels.has(m));
+    const models = Object.keys(scoresData.models).sort().filter((m) => selectedModels.has(m));
     const yFrom = parseInt(yearFrom.value) || 2000;
     const yTo = parseInt(yearTo.value) || 2026;
     const traces = [];
 
-    models.forEach((model, mi) => {
-      const color = COLORS[mi % COLORS.length];
-      const modelScores = scoresData.models[model];
-      const nDates = scoresData.origin_dates.length;
-      const avgVals = new Array(nDates).fill(null);
+    // Use only the selected max horizon (data keys are h0, h1, ... where h0 = horizon 1)
+    const hk = `h${maxHorizon - 1}`;
 
-      const horizonKeys = Object.keys(modelScores);
-      for (let i = 0; i < nDates; i++) {
-        let sum = 0, cnt = 0;
-        for (const hk of horizonKeys) {
-          const v = modelScores[hk][metricKey]?.[i];
-          if (v != null) { sum += v; cnt++; }
-        }
-        if (cnt > 0) avgVals[i] = sum / cnt;
-      }
+    models.forEach((model) => {
+      const color = modelColorMap[model];
+      const modelScores = scoresData.models[model];
+      const hData = modelScores[hk]?.[metricKey];
 
       const filtDates = [], filtVals = [];
       scoresData.origin_dates.forEach((d, i) => {
         const y = parseInt(d.slice(0, 4));
-        if (y >= yFrom && y <= yTo && avgVals[i] != null) {
-          filtDates.push(d); filtVals.push(avgVals[i]);
+        const v = hData?.[i];
+        if (y >= yFrom && y <= yTo && v != null) {
+          filtDates.push(d); filtVals.push(v);
         }
       });
 
@@ -397,10 +499,10 @@
     const dark2 = isDark();
     const layout = {
       font: plotlyFont(),
-      title: { text: `${displayName} (12-month rolling avg)`, font: { size: 14, color: dark2 ? "#ccc" : "#555" }, x: 0.01 },
+      title: { text: `${displayName} — horizon ${maxHorizon} (12-month rolling avg)`, font: { size: 14, color: dark2 ? "#ccc" : "#555" }, x: 0.01 },
       xaxis: {
         range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
-        ...plotlyGrid(), tickformat: "%Y", dtick: "M24",
+        ...plotlyGrid(), tickformat: "%Y",
         spikecolor: dark2 ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)", spikethickness: 1,
       },
       yaxis: { title: { text: displayName, standoff: 10 }, ...plotlyGrid() },
@@ -417,10 +519,9 @@
     scoreChartDiv.on("plotly_relayout", syncYearsFromPlotly);
   }
 
-  // --- cumulative error chart (only for MAE and RMSE) ---
+  // --- cumulative error chart (only for MAE and RMSE) — single horizon only ---
   function drawCumulativeChart() {
     const metricKey = selMetric.value;
-    // Only show cumulative chart for MAE and SE (RMSE)
     if (metricKey !== "MAE" && metricKey !== "SqErr") {
       Plotly.purge(cumChartDiv);
       cumChartDiv.style.display = "none";
@@ -433,34 +534,27 @@
     const isRMSE = metricKey === "SqErr";
     const displayName = isRMSE ? "Cumulative Squared Error" : "Cumulative Absolute Error";
 
-    const models = Object.keys(scoresData.models).filter((m) => selectedModels.has(m));
+    const models = Object.keys(scoresData.models).sort().filter((m) => selectedModels.has(m));
     const yFrom = parseInt(yearFrom.value) || 2000;
     const yTo = parseInt(yearTo.value) || 2026;
     const traces = [];
 
-    models.forEach((model, mi) => {
-      const color = COLORS[mi % COLORS.length];
-      const modelScores = scoresData.models[model];
-      const nDates = scoresData.origin_dates.length;
-      const avgVals = new Array(nDates).fill(null);
+    // Use only the selected max horizon
+    const hk = `h${maxHorizon - 1}`;
 
-      const horizonKeys = Object.keys(modelScores);
-      for (let i = 0; i < nDates; i++) {
-        let sum = 0, cnt = 0;
-        for (const hk of horizonKeys) {
-          const v = modelScores[hk][metricKey]?.[i];
-          if (v != null) { sum += v; cnt++; }
-        }
-        if (cnt > 0) avgVals[i] = sum / cnt;
-      }
+    models.forEach((model) => {
+      const color = modelColorMap[model];
+      const modelScores = scoresData.models[model];
+      const hData = modelScores[hk]?.[metricKey];
 
       // filter and accumulate
       const filtDates = [], cumVals = [];
       let cumSum = 0;
       scoresData.origin_dates.forEach((d, i) => {
         const y = parseInt(d.slice(0, 4));
-        if (y >= yFrom && y <= yTo && avgVals[i] != null) {
-          cumSum += avgVals[i];
+        const v = hData?.[i];
+        if (y >= yFrom && y <= yTo && v != null) {
+          cumSum += v;
           filtDates.push(d);
           cumVals.push(cumSum);
         }
@@ -477,10 +571,10 @@
     const dark3 = isDark();
     const layout = {
       font: plotlyFont(),
-      title: { text: displayName, font: { size: 14, color: dark3 ? "#ccc" : "#555" }, x: 0.01 },
+      title: { text: `${displayName} — horizon ${maxHorizon}`, font: { size: 14, color: dark3 ? "#ccc" : "#555" }, x: 0.01 },
       xaxis: {
         range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
-        ...plotlyGrid(), tickformat: "%Y", dtick: "M24",
+        ...plotlyGrid(), tickformat: "%Y",
         spikecolor: dark3 ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)", spikethickness: 1,
       },
       yaxis: { title: { text: displayName, standoff: 10 }, ...plotlyGrid() },

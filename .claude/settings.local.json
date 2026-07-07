@@ -37,7 +37,22 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/)",
       "Bash(/opt/homebrew/bin/python3.10 src/models/generate_two_years.py)",
       "Bash(ls model-output/MacroHub-RandomWalk/2024-* model-output/MacroHub-RandomWalk/2025-* model-output/MacroHub-RandomWalk/2026-0[123]*)",
-      "Bash(/opt/homebrew/bin/python3.10 -c \"from joblib import Parallel; print\\('joblib OK'\\)\")"
+      "Bash(/opt/homebrew/bin/python3.10 -c \"from joblib import Parallel; print\\('joblib OK'\\)\")",
+      "Bash(python3.10 -c ':*)",
+      "Bash(node --input-type=module)",
+      "Bash(node -e ':*)",
+      "Bash(/opt/homebrew/bin/python3.10 src/scoring/score_forecasts.py)",
+      "Bash(node -e \"const fs=require\\('fs'\\); try{new Function\\(fs.readFileSync\\('/Users/siccokooiker/Nextcloud/SBE_EDS_MLinMacro \\(Projectfolder\\)/AI_projects/Macro_Forecast_Hub/docs/js/evaluation.js','utf8'\\)\\); console.log\\('OK'\\);} catch\\(e\\){console.error\\(e.message\\);}\")",
+      "Bash(/opt/homebrew/bin/python3.10 src/generate_dashboard_data.py)",
+      "Bash(/opt/homebrew/bin/python3.10 -c ':*)",
+      "Bash(ls -lh \"/Users/siccokooiker/Nextcloud/SBE_EDS_MLinMacro \\(Projectfolder\\)/AI_projects/Macro_Forecast_Hub/docs/data/\"*.json)",
+      "Bash(ls -lh \"/Users/siccokooiker/Nextcloud/SBE_EDS_MLinMacro \\(Projectfolder\\)/AI_projects/Macro_Forecast_Hub/docs/data/scores_\"*.json)",
+      "Bash(ls -d \"/Users/siccokooiker/Nextcloud/SBE_EDS_MLinMacro \\(Projectfolder\\)/AI_projects/Macro_Forecast_Hub/model-output/\"*/)",
+      "Bash(du -sh \"/Users/siccokooiker/Nextcloud/SBE_EDS_MLinMacro \\(Projectfolder\\)/AI_projects/Macro_Forecast_Hub/model-output/\"*/)",
+      "Bash(ls -lh docs/data/scores_*.json)",
+      "Bash(/opt/homebrew/bin/python3.10 \"/Users/siccokooiker/Nextcloud/SBE_EDS_MLinMacro \\(Projectfolder\\)/AI_projects/Macro_Forecast_Hub/src/scoring/score_forecasts.py\")",
+      "Bash(/opt/homebrew/bin/python3.10 \"/Users/siccokooiker/Nextcloud/SBE_EDS_MLinMacro \\(Projectfolder\\)/AI_projects/Macro_Forecast_Hub/src/generate_dashboard_data.py\")",
+      "Bash(python3 src/generate_dashboard_data.py)"
     ]
   }
 }

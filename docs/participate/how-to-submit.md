@@ -19,10 +19,14 @@ main branch.
 
 ## Submission Timeline
 
+Forecasts are **pre-registered** during a strict **24-hour window** — you may
+only submit on the origin date itself. Pull requests validated outside this
+window are automatically rejected by CI.
+
 | Event | Timing |
 |-------|--------|
-| **Submission window opens** | 10th of each month |
-| **Submission deadline** | 17th of each month, 23:59 US/Eastern |
+| **Registration window opens** | 17th of each month, 00:00 US/Eastern |
+| **Registration window closes** | 17th of each month, 23:59 US/Eastern |
 | **Target data updated** | ~10th of each month (FRED-MD release) |
 | **Scores published** | After target data is available |
 
@@ -32,7 +36,7 @@ main branch.
 
 ### 1. Fork the repository
 
-Fork [Macro-Forecast-Hub](https://github.com/macro-forecast-hub/Macro-Forecast-Hub)
+Fork [Macro-Forecast-Hub](https://github.com/Sicco123/US-Macro-Forecast-Hub)
 to your GitHub account.
 
 ### 2. Create your model directory

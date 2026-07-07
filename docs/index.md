@@ -1,7 +1,15 @@
-# Macro Forecast Hub
-
-A collaborative platform for **probabilistic forecasting** of key U.S.
-macroeconomic indicators from the **FRED-MD** monthly dataset.
+<div class="arena-hero" markdown="0">
+  <span class="arena-live">Live Arena</span>
+  <h1>Macro Forecast Hub</h1>
+  <p>A live forecasting arena for U.S. macroeconomic indicators from the
+  FRED-MD monthly dataset &mdash; probabilistic forecasts, pre-registered and
+  scored on the unknown future.</p>
+  <div class="arena-cta">
+    <a href="evaluation/leaderboard/">View Leaderboard →</a>
+    <a class="secondary" href="participate/how-to-submit/">Enter the Arena</a>
+  </div>
+  <div class="arena-countdown" id="arena-countdown"></div>
+</div>
 
 ---
 
@@ -19,7 +27,7 @@ macroeconomic forecasting.
 |---------|-------------|
 | **12 Target Indicators** | Core macro series from FRED-MD including output, employment, prices, and interest rates |
 | **Probabilistic Forecasts** | Predictive distributions via 5 quantile levels (0.05, 0.1, 0.5, 0.9, 0.95) |
-| **Monthly Frequency** | Forecasts submitted between the 10th and 17th of each month |
+| **24-Hour Registration** | Forecasts pre-registered during a strict 24-hour window on the 17th of each month |
 | **1-24 Month Horizons** | Monthly forecast horizons up to 2 years ahead |
 | **Automated Evaluation** | Weighted Interval Score (WIS) scoring against realized values |
 | **Hub Ensemble** | Median combination of all submitted models |

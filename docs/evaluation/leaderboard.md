@@ -25,13 +25,7 @@ Evaluation period: **January 2000 -- March 2026**.
   <label>Metric
     <select id="eval-metric">
       <option value="MAE">MAE</option>
-      <option value="WIS">WIS</option>
       <option value="SqErr">RMSE</option>
-      <option value="MeanQS">MeanQS</option>
-      <option value="Coverage_80">Coverage 80%</option>
-      <option value="Coverage_90">Coverage 90%</option>
-      <option value="IntervalWidth_80">Interval Width 80%</option>
-      <option value="IntervalWidth_90">Interval Width 90%</option>
     </select>
   </label>
   <label>Horizon
@@ -69,11 +63,13 @@ Evaluation period: **January 2000 -- March 2026**.
   <label>To
     <input type="number" id="eval-year-to" value="2026" min="2000" max="2026">
   </label>
+  <button id="eval-reset-zoom" class="dash-btn" title="Reset zoom to full range">&#x21ba; Reset Zoom</button>
 </div>
 
 <div class="dash-models" id="eval-models">Loading models...</div>
 
 <div class="dash-chart" id="eval-chart"></div>
+<div class="dash-chart" id="eval-cumulative-chart"></div>
 
 </div>
 
@@ -85,7 +81,6 @@ Evaluation period: **January 2000 -- March 2026**.
     <select id="eval-sum-metric">
       <option value="MAE">MAE (Absolute Error)</option>
       <option value="SqErr">RMSE (Root Mean Squared Error)</option>
-      <option value="WIS">WIS</option>
     </select>
   </label>
   <label>Show
@@ -93,6 +88,45 @@ Evaluation period: **January 2000 -- March 2026**.
       <option value="rank">Average Rank</option>
       <option value="score">Average Score</option>
     </select>
+  </label>
+  <label>Horizon
+    <select id="eval-sum-horizon">
+      <option value="all" selected>All horizons</option>
+      <option value="0">1 month</option>
+      <option value="1">2 months</option>
+      <option value="2">3 months</option>
+      <option value="3">4 months</option>
+      <option value="4">5 months</option>
+      <option value="5">6 months</option>
+      <option value="6">7 months</option>
+      <option value="7">8 months</option>
+      <option value="8">9 months</option>
+      <option value="9">10 months</option>
+      <option value="10">11 months</option>
+      <option value="11">12 months</option>
+      <option value="12">13 months</option>
+      <option value="13">14 months</option>
+      <option value="14">15 months</option>
+      <option value="15">16 months</option>
+      <option value="16">17 months</option>
+      <option value="17">18 months</option>
+      <option value="18">19 months</option>
+      <option value="19">20 months</option>
+      <option value="20">21 months</option>
+      <option value="21">22 months</option>
+      <option value="22">23 months</option>
+      <option value="23">24 months</option>
+    </select>
+  </label>
+  <label>From
+    <input type="number" id="eval-sum-year-from" value="2000" min="2000" max="2026">
+  </label>
+  <label>To
+    <input type="number" id="eval-sum-year-to" value="2026" min="2000" max="2026">
+  </label>
+  <label class="dash-toggle">
+    <input type="checkbox" id="eval-sum-covid" checked>
+    Include COVID (2020-03 – 2021-06)
   </label>
 </div>
 
@@ -117,6 +151,10 @@ metric and toggle between rank and score views. The best value per column is
 highlighted in green.
 
 ### Metric definitions
+
+All metrics are computed in the **transformed space** (Δlog for INDPRO /
+CPIAUCSL / PCEPI; first difference for UNRATE), matching the scale in which
+forecasts are submitted and visualized.
 
 - **MAE** — Mean Absolute Error of the **median** (Q0.5) forecast.
   Lower is better.

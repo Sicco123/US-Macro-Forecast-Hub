@@ -5,8 +5,14 @@ Each origin date produces 24-month-ahead forecasts (horizons 0--23).
 Models:
   - MacroHub-RandomWalk   (all 12 targets)
   - BASELINE-ARMA_BIC     (INDPRO, CPIAUCSL, PCEPI, UNRATE)
-  - SBE_EDS-ARMA_BIC      (INDPRO, CPIAUCSL, PCEPI, UNRATE)
   - MacroHub-Ensemble     (median across models per target)
+
+Comparison space (forecasts and truth evaluated in same transformed scale):
+  INDPRO   → Δlog(x)   monthly log difference
+  CPIAUCSL → Δlog(x)   monthly log difference
+  PCEPI    → Δlog(x)   monthly log difference
+  UNRATE   → Δx        monthly first difference
+  all others → level (unchanged)
 
 Speed:
   - ARMA on rolling 10-year (120 obs) window, re-selected every month
@@ -97,10 +103,10 @@ def _build_rows(origin_str, target, teds, qval_matrix, mean_arr):
     rows = []
     for h in range(N_AHEAD):
         ted = teds[h]
-        mv = round(float(mean_arr[h]), 4)
+        mv = round(float(mean_arr[h]), 6)
         for qi in range(N_Q):
             rows.append((origin_str, target, ted, h, "US", "quantile",
-                         float(QUANTILES[qi]), round(float(qval_matrix[h, qi]), 4)))
+                         float(QUANTILES[qi]), round(float(qval_matrix[h, qi]), 6)))
         rows.append((origin_str, target, ted, h, "US", "mean", "", mv))
     return rows
 
@@ -117,20 +123,31 @@ def generate_rw(series_dict, origin_str, targets):
         if len(vals) < 24:
             continue
 
-        last_val = vals[-1]
         last_date = pd.Timestamp(dts[-1])
         teds = _target_end_dates(last_date)
+
+        # Transform to comparison space for the four key targets
+        if target in LOG_DIFF_TARGETS:
+            if np.any(vals <= 0):
+                continue
+            work = np.diff(np.log(vals))   # monthly log differences
+        elif target in DIFF_TARGETS:
+            work = np.diff(vals)           # monthly first differences
+        else:
+            work = vals                    # levels (all other targets)
+
+        last_val = work[-1]
 
         qval_matrix = np.empty((N_AHEAD, N_Q))
         for h in range(N_AHEAD):
             hh = max(h, 1)
-            if len(vals) > hh:
-                errors = vals[hh:] - vals[:-hh]
+            if len(work) > hh:
+                errors = work[hh:] - work[:-hh]
                 errors = errors[np.isfinite(errors)]
             else:
                 errors = np.array([0.0])
             if len(errors) < 24:
-                e1 = vals[1:] - vals[:-1]
+                e1 = work[1:] - work[:-1]
                 e1 = e1[np.isfinite(e1)]
                 errors = e1 * np.sqrt(hh) if len(e1) > 0 else np.array([0.0])
             qval_matrix[h] = last_val + np.quantile(errors, QUANTILES)
@@ -141,22 +158,46 @@ def generate_rw(series_dict, origin_str, targets):
     return all_rows
 
 
-# ── ARMA-BIC ───────────────────────────────────────────────────────────────
+# ── ARIMA(p,d,q)-BIC with FRED-MD transformations ─────────────────────────
+#
+# Each target uses its standard FRED-MD transformation code (tcode):
+#   1 = levels          4 = log            7 = Δ(x/x_{-1})
+#   2 = Δx              5 = Δlog(x)
+#   3 = Δ²x             6 = Δ²log(x)
+#
+# We map tcode → (take_log, d) and fit ARIMA(p, d, q) on the (possibly
+# log-transformed) levels.  statsmodels handles differencing internally,
+# so get_forecast() returns predictions in the (log-)level scale.  We then
+# exp() back if needed.  Quantiles transform correctly since exp is monotone.
 
-def _standardize(s):
-    mu, sigma = s.mean(), s.std()
-    if sigma == 0:
-        sigma = 1.0
-    return (s - mu) / sigma, mu, sigma
+# Targets whose forecasts (and truth) are in log-diff or diff space
+LOG_DIFF_TARGETS = {"INDPRO", "CPIAUCSL", "PCEPI"}
+DIFF_TARGETS = {"UNRATE"}
+
+# TCODE used only to determine whether to take log before differencing
+TCODE = {
+    "INDPRO": 5,     # take log, then first difference → Δlog
+    "CPIAUCSL": 5,   # take log, then first difference → Δlog
+    "PCEPI": 5,      # take log, then first difference → Δlog
+    "UNRATE": 2,     # first difference → Δx
+}
+
+def _tcode_params(tcode):
+    """Return (take_log, d) for a FRED-MD transformation code."""
+    return {
+        1: (False, 0), 2: (False, 1), 3: (False, 2),
+        4: (True, 0),  5: (True, 1),  6: (True, 2),
+        7: (False, 1),
+    }[tcode]
 
 
-def select_arma_order(z):
-    """BIC grid search using CSS estimation (fast)."""
+def select_arima_order(window, d):
+    """BIC grid search over ARIMA(p, d, q) using CSS estimation (fast)."""
     best_bic, best_order = np.inf, (1, 0)
     for p, q in GRID:
         try:
-            res = ARIMA(z, order=(p, 0, q)).fit(method="css",
-                                                 method_kwargs={"maxiter": 100})
+            res = ARIMA(window, order=(p, d, q)).fit(
+                method="css", method_kwargs={"maxiter": 100})
             if res.bic < best_bic:
                 best_bic = res.bic
                 best_order = (p, q)
@@ -178,36 +219,47 @@ def generate_arma(series_dict, origin_str, targets):
         last_date = pd.Timestamp(dts[-1])
         teds = _target_end_dates(last_date)
 
-        # Rolling 10-year window, standardize once
-        window = vals[-MAX_HISTORY:]
-        z, mu, sigma = _standardize(window)
+        take_log, _ = _tcode_params(TCODE[target])
+        raw = vals[-MAX_HISTORY:]
 
-        # Fast CSS grid search
-        p, q = select_arma_order(z)
+        if take_log:
+            if np.any(raw <= 0):
+                continue  # log not safe
+            raw = np.log(raw)
+
+        # Pre-difference: ARMA(p,0,q) on the first-differenced (log-)series
+        # Forecasts are directly in Δlog or Δ space — no back-transform needed
+        window = np.diff(raw)
+
+        # Fast CSS grid search over ARMA(p, 0, q)
+        p, q = select_arima_order(window, 0)
 
         # Final forecast with MLE for proper uncertainty
         try:
-            res = ARIMA(z, order=(p, 0, q)).fit(method_kwargs={"maxiter": 200})
+            res = ARIMA(window, order=(p, 0, q)).fit(
+                method_kwargs={"maxiter": 200})
             fc = res.get_forecast(steps=N_AHEAD)
-            pt = np.array(fc.predicted_mean) * sigma + mu
-            st = np.array(fc.se_mean) * sigma
+            pt = np.array(fc.predicted_mean)   # in Δlog or Δ space
+            st = np.array(fc.se_mean)
         except Exception:
             continue
 
-        # Vectorised quantiles: (N_AHEAD,1) x (1,N_Q) -> (N_AHEAD, N_Q)
+        # Quantiles in Δlog / Δ space — output directly, no back-transform
         qval_matrix = stats.norm.ppf(
             QUANTILES[np.newaxis, :],
             loc=pt[:, np.newaxis],
             scale=st[:, np.newaxis],
         )
-        all_rows.extend(_build_rows(origin_str, target, teds, qval_matrix, pt))
+        mean_arr = pt
+
+        all_rows.extend(_build_rows(origin_str, target, teds, qval_matrix, mean_arr))
 
     return all_rows
 
 
 # ── Process one origin date ────────────────────────────────────────────────
 
-def process_origin(series_dict, origin, rw_dir, bl_dir, sbe_dir):
+def process_origin(series_dict, origin, rw_dir, bl_dir):
     """Process a single origin date: RW + ARMA, save CSVs."""
     ds = origin.strftime("%Y-%m-%d")
 
@@ -217,12 +269,11 @@ def process_origin(series_dict, origin, rw_dir, bl_dir, sbe_dir):
         pd.DataFrame(rw_rows, columns=COLUMNS).to_csv(
             rw_dir / f"{ds}-MacroHub-RandomWalk.csv", index=False)
 
-    # ARMA (4 targets) — compute once, save for both BASELINE and SBE_EDS
+    # ARMA (4 targets)
     arma_rows = generate_arma(series_dict, ds, ARMA_TARGETS)
     if arma_rows:
         df = pd.DataFrame(arma_rows, columns=COLUMNS)
         df.to_csv(bl_dir / f"{ds}-BASELINE-ARMA_BIC.csv", index=False)
-        df.to_csv(sbe_dir / f"{ds}-SBE_EDS-ARMA_BIC.csv", index=False)
 
     return ds
 
@@ -249,7 +300,7 @@ def generate_ensemble(origin_str):
              "location", "output_type", "output_type_id"]
 
     agg = combined.groupby(gcols).agg(
-        value=("value", lambda x: round(float(x.astype(float).median()), 4)),
+        value=("value", lambda x: round(float(x.astype(float).median()), 2)),
         n=("_model", "nunique"),
     ).reset_index()
     agg = agg[agg["n"] >= 2].drop(columns="n")
@@ -270,11 +321,10 @@ def main():
 
     rw_dir = MODEL_OUTPUT_DIR / "MacroHub-RandomWalk"
     bl_dir = MODEL_OUTPUT_DIR / "BASELINE-ARMA_BIC"
-    sbe_dir = MODEL_OUTPUT_DIR / "SBE_EDS-ARMA_BIC"
     ens_dir = MODEL_OUTPUT_DIR / "MacroHub-Ensemble"
 
     # Create output directories upfront
-    for d in [rw_dir, bl_dir, sbe_dir, ens_dir]:
+    for d in [rw_dir, bl_dir, ens_dir]:
         d.mkdir(parents=True, exist_ok=True)
 
     total = len(ORIGIN_DATES)
@@ -282,7 +332,7 @@ def main():
 
     # Phase 1: RW + ARMA sequentially
     for idx, origin in enumerate(ORIGIN_DATES):
-        ds = process_origin(series_dict, origin, rw_dir, bl_dir, sbe_dir)
+        ds = process_origin(series_dict, origin, rw_dir, bl_dir)
         print(f"\r  [{idx+1}/{total}] {ds}", end="", flush=True)
 
     # Phase 2: Ensemble (reads files written in phase 1)

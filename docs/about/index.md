@@ -62,4 +62,4 @@ If you use data from the Macro Forecast Hub in your research, please cite:
 
 > Macro Forecast Hub (2025). "Macro Forecast Hub: A Collaborative Platform
 > for Probabilistic Macroeconomic Forecasting."
-> https://github.com/macro-forecast-hub/Macro-Forecast-Hub
+> https://github.com/Sicco123/US-Macro-Forecast-Hub

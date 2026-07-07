@@ -1,15 +1,15 @@
 """
 Generate pseudo-real-time historical forecasts from 2000 onwards for:
   - MacroHub-RandomWalk (random walk)
-  - BASELINE-ARMA_BIC (ARMA on FRED-MD transformed data, inverted back to levels)
+  - BASELINE-ARMA_BIC (ARMA on pre-differenced series, output in Δlog/Δ space)
 
 Targets: INDPRO, CPIAUCSL, PCEPI, UNRATE
 
-FRED-MD transformation codes:
-  INDPRO   = 5 (Δlog)  → fit ARIMA(p,1,q) on log(x), forecast log(x), exp()
-  CPIAUCSL = 6 (Δ²log) → fit ARIMA(p,2,q) on log(x), forecast log(x), exp()
-  PCEPI    = 6 (Δ²log) → fit ARIMA(p,2,q) on log(x), forecast log(x), exp()
-  UNRATE   = 2 (Δ)     → fit ARIMA(p,1,q) on x, forecast x directly
+Comparison space (forecasts and truth evaluated in same transformed scale):
+  INDPRO   → Δlog(x)   monthly log difference
+  CPIAUCSL → Δlog(x)   monthly log difference
+  PCEPI    → Δlog(x)   monthly log difference
+  UNRATE   → Δx        monthly first difference
 """
 
 import warnings
@@ -27,12 +27,16 @@ TARGET_DATA_PATH = HUB_ROOT / "target-data" / "latest-target_values.csv"
 BASELINE_DIR = HUB_ROOT / "model-output" / "MacroHub-RandomWalk"
 ARMA_DIR = HUB_ROOT / "model-output" / "BASELINE-ARMA_BIC"
 
+# Targets whose forecasts (and truth) are in log-diff or diff space
+LOG_DIFF_TARGETS = {"INDPRO", "CPIAUCSL", "PCEPI"}
+DIFF_TARGETS = {"UNRATE"}
+
 TARGETS = {
-    # target: (transform_code, d for ARIMA, apply_log)
-    "INDPRO":   (5, 1, True),
-    "CPIAUCSL": (6, 2, True),
-    "PCEPI":    (6, 2, True),
-    "UNRATE":   (2, 1, False),
+    # target: (apply_log,)  — d always 0; we pre-difference before fitting ARMA
+    "INDPRO":   True,
+    "CPIAUCSL": True,
+    "PCEPI":    True,
+    "UNRATE":   False,
 }
 
 QUANTILES = [0.05, 0.1, 0.5, 0.9, 0.95]
@@ -83,28 +87,27 @@ def forecast_arima(
 
 
 def rw_forecast_with_errors(
-    values: np.ndarray, n_ahead: int, min_err_hist: int = 24
+    work: np.ndarray, n_ahead: int, min_err_hist: int = 24
 ) -> tuple[float, np.ndarray]:
     """
-    Random walk: point = last value.
-    Quantile errors from empirical h-step RW errors.
+    Random walk in the provided (possibly pre-differenced) series space.
+    Point forecast = last observed value.
+    Quantile errors from empirical h-step errors in that space.
     Returns (point, error_quantiles) for each horizon.
     """
-    last_val = values[-1]
+    last_val = work[-1]
     err_quantiles = []
 
     for h in range(1, n_ahead + 1):
-        # Historical h-step RW errors
-        if len(values) > h:
-            errors = values[h:] - values[:-h]
+        if len(work) > h:
+            errors = work[h:] - work[:-h]
             errors = errors[np.isfinite(errors)]
         else:
             errors = np.array([0.0])
 
         if len(errors) < min_err_hist:
-            # Scale 1-step errors by sqrt(h)
-            if len(values) > 1:
-                e1 = values[1:] - values[:-1]
+            if len(work) > 1:
+                e1 = work[1:] - work[:-1]
                 e1 = e1[np.isfinite(e1)]
                 errors = e1 * np.sqrt(h)
             else:
@@ -177,7 +180,7 @@ def run_backfill():
         baseline_rows = []
         arma_rows = []
 
-        for target, (tcode, d, use_log) in TARGETS.items():
+        for target, use_log in TARGETS.items():
             sdf = target_df[target_df["target"] == target].copy()
             sdf = sdf.sort_values("truth_date")
             sdf = sdf[sdf["truth_date"] < origin]
@@ -188,8 +191,18 @@ def run_backfill():
             values = sdf["value"].values.astype(float)
             last_date = sdf["truth_date"].iloc[-1]
 
-            # === BASELINE (random walk) ===
-            last_val, rw_err_q = rw_forecast_with_errors(values, max(HORIZONS) + 1)
+            # Transform to comparison space (Δlog or Δ)
+            if target in LOG_DIFF_TARGETS:
+                if np.any(values <= 0):
+                    continue
+                work = np.diff(np.log(values))
+            elif target in DIFF_TARGETS:
+                work = np.diff(values)
+            else:
+                work = values.copy()
+
+            # === BASELINE (random walk in comparison space) ===
+            last_val, rw_err_q = rw_forecast_with_errors(work, max(HORIZONS) + 1)
 
             for horizon in HORIZONS:
                 target_month = last_date + pd.DateOffset(months=horizon + 1)
@@ -197,10 +210,11 @@ def run_backfill():
                 q_vals = last_val + rw_err_q[horizon]
                 baseline_rows.extend(make_rows(origin_str, target, horizon, ted, last_val, q_vals))
 
-            # === ARMA on transformed data ===
-            working = np.log(values) if use_log else values.copy()
+            # === ARMA(p,0,q) on pre-differenced series ===
+            # work is already in Δlog or Δ space — fit ARMA with d=0
+            raw = np.log(values) if use_log else values.copy()
+            arma_window = np.diff(raw)  # pre-differenced
 
-            # Select order every 12 months or if not yet selected
             cache_key = target
             need_select = (
                 cache_key not in arma_orders
@@ -208,7 +222,7 @@ def run_backfill():
             )
 
             if need_select:
-                p, q = select_arima_order(working, d)
+                p, q = select_arima_order(arma_window, 0)  # d=0 on pre-diff series
                 arma_orders[cache_key] = (p, q)
                 last_selection_year[cache_key] = origin.year
 
@@ -216,7 +230,7 @@ def run_backfill():
 
             try:
                 n_ahead = max(HORIZONS) + 1
-                fc_point, fc_std = forecast_arima(working, p, d, q, n_ahead)
+                fc_point, fc_std = forecast_arima(arma_window, p, 0, q, n_ahead)
             except Exception:
                 # Fallback: use baseline if ARIMA fails
                 for horizon in HORIZONS:
@@ -230,21 +244,12 @@ def run_backfill():
                 target_month = last_date + pd.DateOffset(months=horizon + 1)
                 ted = last_day_of_month(target_month.year, target_month.month)
 
-                mu_w = fc_point[horizon]
-                sigma_w = max(fc_std[horizon], 1e-10)
+                mu = fc_point[horizon]
+                sigma = max(fc_std[horizon], 1e-10)
 
-                # Quantiles in working space
-                q_working = stats.norm.ppf(QUANTILES, loc=mu_w, scale=sigma_w)
-
-                # Transform back to levels
-                if use_log:
-                    q_levels = np.exp(q_working)
-                    point_level = float(np.exp(mu_w))
-                else:
-                    q_levels = q_working
-                    point_level = float(mu_w)
-
-                arma_rows.extend(make_rows(origin_str, target, horizon, ted, point_level, q_levels))
+                # Quantiles directly in Δlog / Δ space — no back-transform
+                q_vals = stats.norm.ppf(QUANTILES, loc=mu, scale=sigma)
+                arma_rows.extend(make_rows(origin_str, target, horizon, ted, float(mu), q_vals))
 
         # Save files
         if baseline_rows:

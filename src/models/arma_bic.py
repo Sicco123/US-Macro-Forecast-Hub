@@ -2,16 +2,20 @@
 ARMA(p,q) model with BIC-based lag selection for the Macro Forecast Hub.
 
 For each target indicator, this script:
-  1. Fits ARMA(p,q) models over a grid of (p,q) values
-  2. Selects the model minimizing BIC
-  3. Produces point and quantile forecasts from the Gaussian predictive
-     distribution
+  1. Pre-transforms to the comparison space (log-diff or diff)
+  2. Fits ARMA(p,0,q) models on the pre-differenced series, selecting by BIC
+  3. Outputs forecasts directly in the comparison space (no back-transform)
+
+Comparison space:
+  INDPRO   → Δlog(x)   monthly log difference
+  CPIAUCSL → Δlog(x)   monthly log difference
+  PCEPI    → Δlog(x)   monthly log difference
+  UNRATE   → Δx        monthly first difference
 
 This is meant to be run by a contributor to generate their submission file.
 """
 
 import warnings
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +39,26 @@ MAX_Q = 4
 MIN_HISTORY = 60  # minimum months of history required
 MAX_HISTORY = 120  # use last 10 years for estimation
 
+# Targets whose forecasts (and truth) are in log-diff or diff space
+LOG_DIFF_TARGETS = {"INDPRO", "CPIAUCSL", "PCEPI"}
+DIFF_TARGETS = {"UNRATE"}
+
+TCODE = {
+    "INDPRO": 5,     # take log, then first difference → Δlog
+    "CPIAUCSL": 5,   # take log, then first difference → Δlog
+    "PCEPI": 5,      # take log, then first difference → Δlog
+    "UNRATE": 2,     # first difference → Δx
+}
+
+
+def _tcode_params(tcode):
+    """Return (take_log, d) for a FRED-MD transformation code."""
+    return {
+        1: (False, 0), 2: (False, 1), 3: (False, 2),
+        4: (True, 0),  5: (True, 1),  6: (True, 2),
+        7: (False, 1),
+    }[tcode]
+
 
 def last_day_of_month(year: int, month: int) -> str:
     if month == 12:
@@ -44,18 +68,9 @@ def last_day_of_month(year: int, month: int) -> str:
     return (next_month - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
 
-def _standardize(series: np.ndarray) -> tuple[np.ndarray, float, float]:
-    """Standardize series to zero mean, unit variance for numerical stability."""
-    mu, sigma = series.mean(), series.std()
-    if sigma == 0:
-        sigma = 1.0
-    return (series - mu) / sigma, mu, sigma
-
-
-def select_arma_order(series: np.ndarray) -> tuple[int, int]:
-    """Select (p, q) by minimizing BIC over a grid search."""
-    series = series[-MAX_HISTORY:]
-    z, _, _ = _standardize(series)
+def select_arma_order(window: np.ndarray) -> tuple[int, int]:
+    """Select (p, q) by minimizing BIC over a grid search using CSS on a
+    pre-differenced series (d=0)."""
     best_bic = np.inf
     best_order = (1, 0)
 
@@ -64,8 +79,8 @@ def select_arma_order(series: np.ndarray) -> tuple[int, int]:
             if p == 0 and q == 0:
                 continue
             try:
-                model = ARIMA(z, order=(p, 0, q))
-                result = model.fit(method_kwargs={"maxiter": 200})
+                result = ARIMA(window, order=(p, 0, q)).fit(
+                    method="css", method_kwargs={"maxiter": 100})
                 if result.bic < best_bic:
                     best_bic = result.bic
                     best_order = (p, q)
@@ -75,29 +90,18 @@ def select_arma_order(series: np.ndarray) -> tuple[int, int]:
     return best_order
 
 
-def forecast_arma(series: np.ndarray, p: int, q: int, n_ahead: int) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Fit ARMA(p,q) on standardized data and return (point_forecasts, forecast_std)
-    in the original scale for 1..n_ahead steps.
-    """
-    series = series[-MAX_HISTORY:]
-    z, mu, sigma = _standardize(series)
-    model = ARIMA(z, order=(p, 0, q))
-    result = model.fit(method_kwargs={"maxiter": 200})
-
-    forecast_result = result.get_forecast(steps=n_ahead)
-    point_z = np.array(forecast_result.predicted_mean)
-    std_z = np.array(forecast_result.se_mean)
-
-    # Transform back to original scale
-    point = point_z * sigma + mu
-    std = std_z * sigma
-
-    return point, std
+def forecast_arma(window: np.ndarray, p: int, q: int,
+                  n_ahead: int) -> tuple[np.ndarray, np.ndarray]:
+    """Fit ARMA(p,q) and return (point_forecasts, forecast_std)
+    in the pre-differenced (Δlog or Δ) space."""
+    result = ARIMA(window, order=(p, 0, q)).fit(
+        method_kwargs={"maxiter": 200})
+    fc = result.get_forecast(steps=n_ahead)
+    return np.array(fc.predicted_mean), np.array(fc.se_mean)
 
 
 def generate_forecasts(target_df: pd.DataFrame, origin_date: str) -> list[dict]:
-    """Generate ARMA-BIC forecasts for all targets."""
+    """Generate ARMA-BIC forecasts for all targets in log-diff / diff space."""
     records = []
     origin = pd.Timestamp(origin_date)
 
@@ -113,15 +117,28 @@ def generate_forecasts(target_df: pd.DataFrame, origin_date: str) -> list[dict]:
         values = series_df["value"].values.astype(float)
         last_date = pd.Timestamp(series_df["truth_date"].iloc[-1])
 
-        # Select lag order by BIC
-        print(f"  {target}: selecting ARMA order by BIC ...", end=" ", flush=True)
-        p, q = select_arma_order(values)
+        take_log, _ = _tcode_params(TCODE[target])
+        raw = values[-MAX_HISTORY:]
+
+        if take_log:
+            if np.any(raw <= 0):
+                print(f"  Skipping {target}: non-positive values, log not safe")
+                continue
+            raw = np.log(raw)
+
+        # Pre-difference: ARMA(p,0,q) on first-differenced (log-)series
+        window = np.diff(raw)
+
+        # Select lag order by BIC on pre-differenced series
+        print(f"  {target} (log={take_log}, pre-differenced): "
+              f"selecting ARMA order by BIC ...", end=" ", flush=True)
+        p, q = select_arma_order(window)
         print(f"ARMA({p},{q})")
 
-        # Generate forecasts
+        # Generate forecasts in Δlog / Δ space
         try:
             n_ahead = max(HORIZONS) + 1
-            point_fc, std_fc = forecast_arma(values, p, q, n_ahead)
+            point_fc, std_fc = forecast_arma(window, p, q, n_ahead)
         except Exception as e:
             print(f"  Warning: forecast failed for {target}: {e}")
             continue
@@ -130,10 +147,10 @@ def generate_forecasts(target_df: pd.DataFrame, origin_date: str) -> list[dict]:
             target_month = last_date + pd.DateOffset(months=horizon + 1)
             target_end_date = last_day_of_month(target_month.year, target_month.month)
 
-            mu = point_fc[horizon]
+            mu = point_fc[horizon]      # in Δlog or Δ space
             sigma = std_fc[horizon]
 
-            # Quantile forecasts from Gaussian predictive distribution
+            # Quantile forecasts directly in comparison space — no back-transform
             for q_level in REQUIRED_QUANTILES:
                 q_value = stats.norm.ppf(q_level, loc=mu, scale=sigma)
                 records.append({
@@ -144,10 +161,9 @@ def generate_forecasts(target_df: pd.DataFrame, origin_date: str) -> list[dict]:
                     "location": "US",
                     "output_type": "quantile",
                     "output_type_id": q_level,
-                    "value": round(q_value, 4),
+                    "value": round(float(q_value), 4),
                 })
 
-            # Mean
             records.append({
                 "origin_date": origin_date,
                 "target": target,
@@ -156,7 +172,7 @@ def generate_forecasts(target_df: pd.DataFrame, origin_date: str) -> list[dict]:
                 "location": "US",
                 "output_type": "mean",
                 "output_type_id": "",
-                "value": round(mu, 4),
+                "value": round(float(mu), 4),
             })
 
     return records
@@ -170,7 +186,7 @@ def main():
     target_df = pd.read_csv(TARGET_DATA_PATH)
     origin_date = "2026-04-15"
 
-    print(f"Generating ARMA-BIC forecasts for origin_date={origin_date}")
+    print(f"Generating ARIMA-BIC forecasts for origin_date={origin_date}")
     records = generate_forecasts(target_df, origin_date)
 
     if not records:

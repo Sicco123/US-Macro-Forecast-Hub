@@ -1,11 +1,40 @@
 # Macro Forecast Hub
 
-A collaborative platform for probabilistic forecasting of key U.S. macroeconomic
+A live forecasting arena for probabilistic forecasting of key U.S. macroeconomic
 indicators from the [FRED-MD](https://research.stlouisfed.org/econ/mccracken/fred-databases/)
-monthly dataset.
+monthly dataset — forecasts are pre-registered in a strict 24-hour window and
+scored on the unknown future.
 
-> Inspired by the [European COVID-19 Forecast Hub](https://github.com/european-modelling-hubs/RespiCast-Covid19)
+<div align="center">
+
+**[🌐 Live Website & Leaderboard →](https://sicco123.github.io/US-Macro-Forecast-Hub/)**
+
+</div>
+
+> Inspired by [TS-Arena](https://ts-arena.live/), the
+> [European COVID-19 Forecast Hub](https://github.com/european-modelling-hubs/RespiCast-Covid19),
 > and the [Infectious Disease Modeling Hubs](https://hubverse.io/) ecosystem.
+
+---
+
+## The Website
+
+The hub website is deployed automatically to GitHub Pages on every push to `main`:
+
+**https://sicco123.github.io/US-Macro-Forecast-Hub/**
+
+| Page | What you'll find |
+|------|------------------|
+| [Forecasts](https://sicco123.github.io/US-Macro-Forecast-Hub/forecasts/latest/) | Interactive explorer: browse any model's forecast at any origin date since 2000, with 80%/90% prediction bands. Auto-play through time (`Space`), step with arrow keys, click the chart to jump. |
+| [Leaderboard](https://sicco123.github.io/US-Macro-Forecast-Hub/evaluation/leaderboard/) | Model rankings by MAE/RMSE per target and horizon, rolling and cumulative error charts. |
+| [Participate](https://sicco123.github.io/US-Macro-Forecast-Hub/participate/how-to-submit/) | Step-by-step submission guide; the homepage shows a live registration-window countdown. |
+
+To preview locally:
+
+```bash
+pip install mkdocs-material pymdown-extensions
+mkdocs serve   # → http://127.0.0.1:8000
+```
 
 ---
 
@@ -37,7 +66,7 @@ forecast combining the wisdom of all participants.
 - **Frequency:** Monthly
 - **Horizons:** 1 through 24 months ahead
 - **Output:** 5 quantile levels (0.05, 0.1, 0.5, 0.9, 0.95) + optional mean
-- **Submission deadline:** 17th of each month
+- **Submission window:** 24 hours — the 17th of each month, 00:00–23:59 US/Eastern (enforced by CI)
 - **Evaluation metric:** Weighted Interval Score (WIS)
 
 ---

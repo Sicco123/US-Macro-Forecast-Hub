@@ -50,6 +50,24 @@
   margin: 0;
 }
 
+/* ── Inline button (e.g. Reset Zoom) ── */
+.dash-btn {
+  padding: 5px 14px;
+  border: 1px solid var(--md-primary-fg-color, #4051b5);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--md-primary-fg-color, #4051b5);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.dash-btn:hover {
+  background: var(--md-primary-fg-color, #4051b5);
+  color: #fff;
+}
+
 /* ── Model checkboxes ── */
 .dash-models {
   display: flex;
@@ -104,6 +122,20 @@
 
 .dash-slider-row button:hover {
   opacity: 0.8;
+}
+
+.dash-slider-row button:active {
+  transform: scale(0.92);
+}
+
+.dash-models label {
+  padding: 2px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.dash-models label:hover {
+  background: var(--md-default-fg-color--lightest, rgba(0, 0, 0, 0.05));
 }
 
 .dash-slider-row .slider-date {
@@ -196,11 +228,65 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+/* ── Toggle checkbox in controls ── */
+.dash-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+
+.dash-toggle input[type="checkbox"] {
+  width: auto;
+  margin-right: 4px;
+  cursor: pointer;
+}
+
+/* ── Summary table caption ── */
+.eval-sum-caption {
+  font-size: 0.85rem;
+  color: #666;
+  margin: 8px 0 6px;
+}
+
+[data-md-color-scheme="slate"] .eval-sum-caption {
+  color: #aaa;
+}
+
 /* ── Chart containers ── */
 .dash-chart {
+  position: relative;
   margin: 16px 0;
   min-height: 300px;
   border-radius: 8px;
+  transition: opacity 0.2s ease;
+}
+
+/* Loading state: dim chart and show a spinner overlay */
+.dash-chart--loading {
+  opacity: 0.4;
+}
+.dash-chart--loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border: 3px solid var(--md-default-fg-color--lightest, #ddd);
+  border-top-color: var(--md-primary-fg-color, #009688);
+  border-radius: 50%;
+  animation: dash-spin 0.7s linear infinite;
+}
+@keyframes dash-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Empty / no-data message */
+.dash-empty {
+  padding: 80px 20px;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--md-default-fg-color--light, #888);
 }
 
 /* Dark mode: Plotly modebar icons */

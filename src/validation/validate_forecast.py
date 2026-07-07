@@ -14,9 +14,11 @@ Checks:
 
 import csv
 import os
+import re
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 REQUIRED_COLUMNS = [
     "origin_date",
@@ -46,6 +48,21 @@ VALID_OUTPUT_TYPES = {"quantile", "mean"}
 REQUIRED_QUANTILES = [0.05, 0.1, 0.5, 0.9, 0.95]
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
+
+# ts-arena FPRP: forecasts must be committed within a strict 24-hour registration
+# window on the origin date. The window is the origin_date calendar day in ET.
+ET = ZoneInfo("US/Eastern")
+SUBMISSION_WINDOW_HOURS = 24
+
+
+def within_submission_window(origin_date_str: str, now: datetime | None = None) -> bool:
+    """True if `now` is inside the 24h window starting at origin_date 00:00 ET."""
+    if now is None:
+        now = datetime.now(ET)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=ET)
+    start = datetime.strptime(origin_date_str, "%Y-%m-%d").replace(tzinfo=ET)
+    return start <= now < start + timedelta(hours=SUBMISSION_WINDOW_HOURS)
 
 
 def validate_date(date_str: str) -> bool:
@@ -79,6 +96,17 @@ def validate_forecast_file(filepath: str) -> list[str]:
 
     if not rows:
         return [f"No data rows in {filepath}"]
+
+    # Enforce the 24-hour registration window (ts-arena FPRP). Origin date comes
+    # from the filename (YYYY-MM-DD-...). Set HUB_SKIP_WINDOW_CHECK=1 to bypass
+    # (backfills, tests, and the automated ensemble/baseline that commit to main).
+    if os.environ.get("HUB_SKIP_WINDOW_CHECK") != "1":
+        m = re.match(r"(\d{4}-\d{2}-\d{2})-", path.name)
+        if m and not within_submission_window(m.group(1)):
+            errors.append(
+                f"{filepath}: submissions are only accepted during the 24-hour "
+                f"window of the origin date {m.group(1)} (00:00-23:59 US/Eastern)."
+            )
 
     # Track which targets and quantiles are present
     target_horizon_quantiles: dict[tuple, list[float]] = {}

@@ -69,14 +69,20 @@ The remaining 9 indicators are optional.
 
 ```csv
 origin_date,target,target_end_date,horizon,location,output_type,output_type_id,value
-2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.05,99.5
-2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.1,100.1
-2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.5,102.3
-2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.9,104.5
-2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.95,105.2
-2026-04-17,INDPRO,2026-05-31,1,US,mean,,102.4
-2026-04-17,INDPRO,2026-06-30,2,US,quantile,0.05,98.8
+2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.05,-0.003
+2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.1,0.0
+2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.5,0.002
+2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.9,0.005
+2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.95,0.007
+2026-04-17,INDPRO,2026-05-31,1,US,mean,,0.002
+2026-04-17,INDPRO,2026-06-30,2,US,quantile,0.05,-0.004
 ...
-2026-04-17,UNRATE,2026-04-30,0,US,quantile,0.05,3.2
+2026-04-17,UNRATE,2026-05-31,1,US,quantile,0.05,-0.2
 ...
 ```
+
+!!! warning "Values must be in transformed units"
+    For the scored targets, submit values in the **transformed space**:
+    `INDPRO`, `CPIAUCSL`, and `PCEPI` use **Δlog(x)** (monthly log change);
+    `UNRATE` uses **Δx** (monthly first difference in percentage points).
+    See [Target Data](../indicators/target-data.md) for details.
