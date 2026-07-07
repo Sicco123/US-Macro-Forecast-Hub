@@ -212,8 +212,10 @@ def run_backfill():
             else:
                 work = values.copy()
 
-            # === BASELINE (random walk in comparison space) ===
-            last_val, rw_err_q = rw_forecast_with_errors(work, max(HORIZONS) + 1)
+            # === BASELINE (naive forecast in comparison space) ===
+            last_val, rw_err_q = rw_forecast_with_errors(
+                work, max(HORIZONS) + 1,
+                diffed=target in LOG_DIFF_TARGETS or target in DIFF_TARGETS)
 
             for horizon in HORIZONS:
                 target_month = last_date + pd.DateOffset(months=horizon + 1)

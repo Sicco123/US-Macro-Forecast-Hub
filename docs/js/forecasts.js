@@ -239,17 +239,36 @@
     drawCumulativeChart();
   }
 
+  // Model with the lowest average MAE at the current max horizon
+  function bestModel(models) {
+    if (!scoresData) return null;
+    const hk = `h${maxHorizon - 1}`;
+    let best = null, bestVal = Infinity;
+    for (const m of models) {
+      const arr = scoresData.models[m]?.[hk]?.MAE;
+      if (!arr) continue;
+      const v = arr.filter(Number.isFinite);
+      if (!v.length) continue;
+      const avg = v.reduce((a, b) => a + b, 0) / v.length;
+      if (avg < bestVal) { bestVal = avg; best = m; }
+    }
+    return best;
+  }
+
   function buildModelCheckboxes() {
     if (!fcData) return;
     const models = Object.keys(fcData.models).sort();
-    selectedModels = new Set(models);
+    // Default: only the best-scoring model on — less clutter, users opt in to more
+    const best = bestModel(models);
+    selectedModels = best ? new Set([best]) : new Set(models);
     // Stable color map: sorted order determines color, never changes on selection
     modelColorMap = {};
     models.forEach((m, i) => { modelColorMap[m] = COLORS[i % COLORS.length]; });
     modelBox.innerHTML = models
       .map((m) => {
         const c = modelColorMap[m];
-        return `<label><input type="checkbox" value="${m}" checked
+        const chk = selectedModels.has(m) ? "checked" : "";
+        return `<label><input type="checkbox" value="${m}" ${chk}
                  style="accent-color:${c}"> <span style="color:${c}; font-weight:600">●</span> ${m}</label>`;
       })
       .join("");
@@ -298,6 +317,34 @@
   }
 
   function stepSlider(delta) {
+    // Step through the FULL origin list; if the next origin falls outside the
+    // current zoom window, slide the window along (width preserved) so the
+    // arrows/autoplay are never stopped by the zoom.
+    const all = fcData ? fcData.origin_dates : originDates;
+    const cur = originDates[sliderIndex];
+    const gi = Math.max(0, Math.min(all.length - 1, all.indexOf(cur) + delta));
+    const next = all[gi];
+    const ny = parseInt(next.slice(0, 4));
+    const yF = parseInt(yearFrom.value) || 2000;
+    const yT = parseInt(yearTo.value) || 2026;
+
+    if (ny < yF || ny + 2 > yT) {
+      const span = yT - yF;
+      let nF = delta > 0 ? Math.min(2026, ny + 2) - span : ny;
+      nF = Math.max(2000, Math.min(nF, 2026 - span));
+      const nT = nF + span;
+      if (nF !== yF || nT !== yT) {
+        yearFrom.value = nF;
+        yearTo.value = nT;
+        updateSlider();
+        yAxisRange = computeYRange();
+        sliderIndex = Math.max(0, originDates.indexOf(next));
+        slider.value = sliderIndex;
+        updateSliderLabel();
+        draw(); drawScoreChart(); drawCumulativeChart();
+        return;
+      }
+    }
     sliderIndex = Math.max(0, Math.min(originDates.length - 1, sliderIndex + delta));
     slider.value = sliderIndex;
     updateSliderLabel();

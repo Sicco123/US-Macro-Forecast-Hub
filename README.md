@@ -67,7 +67,7 @@ forecast combining the wisdom of all participants.
 - **Horizons:** 1 through 24 months ahead
 - **Output:** 5 quantile levels (0.05, 0.1, 0.5, 0.9, 0.95) + optional mean
 - **Submission window:** 24 hours — the 17th of each month, 00:00–23:59 US/Eastern (enforced by CI)
-- **Evaluation metric:** Weighted Interval Score (WIS)
+- **Evaluation metrics:** MAE (median forecast) and RMSE (mean forecast), absolute and relative to the naive benchmark
 
 ---
 

@@ -9,13 +9,16 @@ model_contributors:
     email: macro-forecast-hub@example.org
 team_model_designation: hub_baseline
 methods: >-
-  Random walk baseline model. For levels, the forecast equals the last observed
-  value. For rates, the forecast equals the last observed value. Prediction
-  intervals are based on historical forecast errors.
+  Naive baseline. Growth/inflation targets (monthly log-change or change
+  space): forecast equals the mean of the last 12 monthly changes
+  (Atkeson-Ohanian naive). Level targets: last observed value (random walk).
+  Prediction intervals are based on historical forecast errors of that rule.
 methods_long: >-
-  The baseline model implements a simple random walk forecast for each target
-  indicator. Point forecasts are set equal to the most recent observed value
-  (no-change forecast). Quantile forecasts are derived from the empirical
+  The baseline model implements the standard naive forecast for each target
+  indicator. For targets evaluated in change space (Dlog or D), the point
+  forecast is the average of the last 12 observed monthly changes - the
+  Atkeson-Ohanian naive, the classic hard-to-beat inflation benchmark. For
+  level targets, the point forecast is the most recent observed value. Quantile forecasts are derived from the empirical
   distribution of past forecast errors at each horizon, using a rolling window
   of historical data. This provides a standard benchmark against which all
   other submitted models are evaluated.

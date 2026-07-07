@@ -29,7 +29,7 @@ macroeconomic forecasting.
 | **Probabilistic Forecasts** | Predictive distributions via 5 quantile levels (0.05, 0.1, 0.5, 0.9, 0.95) |
 | **24-Hour Registration** | Forecasts pre-registered during a strict 24-hour window on the 17th of each month |
 | **1-24 Month Horizons** | Monthly forecast horizons up to 2 years ahead |
-| **Automated Evaluation** | Weighted Interval Score (WIS) scoring against realized values |
+| **Automated Evaluation** | MAE / RMSE scoring against realized values, relative to a naive benchmark |
 | **Hub Ensemble** | Median combination of all submitted models |
 
 ---

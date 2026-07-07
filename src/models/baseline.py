@@ -2,9 +2,12 @@
 Generate baseline (random walk) forecasts for the Macro Forecast Hub.
 
 The baseline model produces:
-  - Point forecast: last observed value in comparison space
+  - Point forecast:
+      * differenced targets (Δlog / Δ): mean of the last 12 monthly changes
+        (Atkeson–Ohanian naive)
+      * level targets: last observed value (classic random walk)
   - Quantile forecasts: derived from the empirical distribution of historical
-    forecast errors at each horizon
+    forecast errors of that rule at each horizon
 
 Comparison space (forecasts and truth evaluated in same transformed scale):
   INDPRO, CPIAUCSL, PCEPI → Δlog(x)  monthly log difference

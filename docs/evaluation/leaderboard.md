@@ -160,9 +160,7 @@ forecasts are submitted and visualized.
   Lower is better.
 - **RMSE** — Root Mean Squared Error of the **mean** forecast.
   Penalizes large errors more heavily than MAE. Lower is better.
-- **WIS** — Weighted Interval Score. A proper scoring rule that uses all
-  submitted quantiles to assess the full predictive distribution. Lower is
-  better. See [Methodology](methodology.md) for the formula.
 
-See [Methodology](methodology.md) for full details on all metrics, including
-coverage, interval width, and mean quantile score.
+Both are also reported **relative to the naive benchmark** — values below 1.0
+beat the naive forecast. See [Methodology](methodology.md) for details,
+units, and the definition of the benchmark.
