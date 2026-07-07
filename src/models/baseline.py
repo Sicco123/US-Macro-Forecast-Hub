@@ -61,6 +61,21 @@ def compute_historical_errors(series: pd.Series, horizon: int) -> np.ndarray:
     return errors[np.isfinite(errors)]
 
 
+# Atkeson–Ohanian naive: in change space, forecast the mean of the last 12
+# monthly changes. Carrying a single noisy month forward (the old behaviour)
+# is a terrible inflation forecast; the 12-month mean is the standard
+# hard-to-beat benchmark.
+AO_WINDOW = 12
+
+
+def ao_point_and_errors(work: np.ndarray, horizon: int) -> tuple[float, np.ndarray]:
+    """Point = mean of last 12 changes; errors = historical h-step errors of that rule."""
+    m = np.convolve(work, np.ones(AO_WINDOW) / AO_WINDOW, "valid")
+    actual = work[AO_WINDOW - 1 + horizon:]
+    errors = actual - m[:len(actual)]
+    return m[-1], errors[np.isfinite(errors)]
+
+
 def last_day_of_month(year: int, month: int) -> str:
     """Return the last day of the given month as YYYY-MM-DD."""
     if month == 12:
@@ -99,21 +114,26 @@ def generate_baseline_forecast(target_df: pd.DataFrame, origin_date: str) -> lis
         else:
             work = raw_values                     # levels (all other targets)
 
-        last_value = work[-1]
+        diffed = target in LOG_DIFF_TARGETS or target in DIFF_TARGETS
 
         for horizon in HORIZONS:
             target_month = last_date + pd.DateOffset(months=horizon + 1)
             target_end_date = last_day_of_month(target_month.year, target_month.month)
 
-            # Point forecast = last observed value in comparison space
-            point_forecast = last_value
-
-            # Compute error distribution for this horizon in comparison space
             h = max(horizon, 1)
-            errors = compute_historical_errors(work, h)
+            if diffed:
+                # Change space: Atkeson–Ohanian 12-month-mean naive
+                point_forecast, errors = ao_point_and_errors(work, h)
+            else:
+                # Level space: classic random walk (last observed value)
+                point_forecast = work[-1]
+                errors = compute_historical_errors(work, h)
 
             if len(errors) < MIN_HISTORY:
-                errors = compute_historical_errors(work, 1)
+                if diffed:
+                    _, errors = ao_point_and_errors(work, 1)
+                else:
+                    errors = compute_historical_errors(work, 1)
                 if horizon > 1:
                     errors = errors * np.sqrt(horizon)
 

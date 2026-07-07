@@ -136,12 +136,25 @@ def generate_rw(series_dict, origin_str, targets):
         else:
             work = vals                    # levels (all other targets)
 
-        last_val = work[-1]
+        diffed = target in LOG_DIFF_TARGETS or target in DIFF_TARGETS
+        if diffed:
+            # Atkeson–Ohanian naive: forecast = mean of last 12 monthly changes.
+            # Carrying one noisy month forward is a terrible inflation forecast.
+            W = 12
+            roll = np.convolve(work, np.ones(W) / W, "valid")
+            point = roll[-1]
+        else:
+            point = work[-1]
 
         qval_matrix = np.empty((N_AHEAD, N_Q))
         for h in range(N_AHEAD):
             hh = max(h, 1)
-            if len(work) > hh:
+            if diffed:
+                # Errors of the AO rule itself at this horizon
+                actual = work[W - 1 + hh:]
+                errors = actual - roll[:len(actual)]
+                errors = errors[np.isfinite(errors)]
+            elif len(work) > hh:
                 errors = work[hh:] - work[:-hh]
                 errors = errors[np.isfinite(errors)]
             else:
@@ -150,10 +163,10 @@ def generate_rw(series_dict, origin_str, targets):
                 e1 = work[1:] - work[:-1]
                 e1 = e1[np.isfinite(e1)]
                 errors = e1 * np.sqrt(hh) if len(e1) > 0 else np.array([0.0])
-            qval_matrix[h] = last_val + np.quantile(errors, QUANTILES)
+            qval_matrix[h] = point + np.quantile(errors, QUANTILES)
 
         all_rows.extend(_build_rows(
-            origin_str, target, teds, qval_matrix, np.full(N_AHEAD, last_val)))
+            origin_str, target, teds, qval_matrix, np.full(N_AHEAD, point)))
 
     return all_rows
 
@@ -300,7 +313,9 @@ def generate_ensemble(origin_str):
              "location", "output_type", "output_type_id"]
 
     agg = combined.groupby(gcols).agg(
-        value=("value", lambda x: round(float(x.astype(float).median()), 2)),
+        # 6 decimals: Δlog-space values are ~0.003 — rounding to 2 flattened
+        # the whole ensemble to 0.0 for CPI/INDPRO/PCEPI
+        value=("value", lambda x: round(float(x.astype(float).median()), 6)),
         n=("_model", "nunique"),
     ).reset_index()
     agg = agg[agg["n"] >= 2].drop(columns="n")
