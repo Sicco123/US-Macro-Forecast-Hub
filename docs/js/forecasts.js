@@ -101,39 +101,48 @@
   function computeYRange() {
     const yFrom = parseInt(yearFrom.value) || 2000;
     const yTo = parseInt(yearTo.value) || 2026;
-    const allVals = [];
 
-    // Collect observed (transformed) values in the visible date window
+    // Observed values: collected separately and NEVER clipped — the observed
+    // line must always be fully visible, even when the selected model's
+    // envelope is much narrower than the data (e.g. 2008 / COVID spikes).
+    const truthVals = [];
     const t = truthData[currentTarget];
     if (t) {
       const displayVals = truthDisplayValues(t);
       t.dates.forEach((d, i) => {
         const y = parseInt(d.slice(0, 4));
         if (y >= yFrom && y <= yTo + 1 && displayVals[i] != null) {
-          allVals.push(displayVals[i]);
+          truthVals.push(displayVals[i]);
         }
       });
     }
-    // Collect forecast envelope (q005 / q095) only for the currently selected
-    // models so level-space outliers from stale files can't blow the axis out
+    // Forecast envelope (q005 / q095) of the selected models: percentile-clip
+    // so stale level-space outliers can't blow the axis out
+    const fcVals = [];
     if (fcData) {
       for (const model of Object.keys(fcData.models)) {
         if (!selectedModels.has(model)) continue;
         for (const od of originDates) {
           const e = fcData.models[model][od];
           if (!e) continue;
-          for (const v of (e.q005 || [])) if (v != null) allVals.push(v);
-          for (const v of (e.q095 || [])) if (v != null) allVals.push(v);
+          for (const v of (e.q005 || [])) if (v != null) fcVals.push(v);
+          for (const v of (e.q095 || [])) if (v != null) fcVals.push(v);
         }
       }
     }
-    if (allVals.length === 0) return null;
+    if (truthVals.length === 0 && fcVals.length === 0) return null;
 
-    // Clip to 1st–99th percentile so stale level-space values don't dominate
-    allVals.sort((a, b) => a - b);
-    const lo = allVals[Math.max(0, Math.floor(allVals.length * 0.01))];
-    const hi = allVals[Math.min(allVals.length - 1, Math.floor(allVals.length * 0.99))];
-    const pad = (hi - lo) * 0.08;
+    let lo = Infinity, hi = -Infinity;
+    if (fcVals.length) {
+      fcVals.sort((a, b) => a - b);
+      lo = fcVals[Math.floor(fcVals.length * 0.01)];
+      hi = fcVals[Math.min(fcVals.length - 1, Math.floor(fcVals.length * 0.99))];
+    }
+    for (const v of truthVals) {
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    const pad = (hi - lo) * 0.08 || 1;
     return [lo - pad, hi + pad];
   }
 
@@ -276,6 +285,7 @@
       cb.addEventListener("change", () => {
         if (cb.checked) selectedModels.add(cb.value);
         else selectedModels.delete(cb.value);
+        yAxisRange = computeYRange();  // range must track the selection
         draw(); drawScoreChart(); drawCumulativeChart();
       });
     });
