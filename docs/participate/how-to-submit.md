@@ -1,6 +1,12 @@
 # How to Submit Forecasts
 
-This guide explains how to submit probabilistic forecasts to the Macro Forecast Hub.
+Submit through GitHub with a forecast CSV and, on your first submission, model
+metadata. Prepare both files before the 17th; registration runs from 00:00 to
+23:59 America/New_York (Eastern) on that date. You need forecasts for INDPRO,
+UNRATE, and CPIAUCSL. PAYEMS and the other indicators are optional.
+
+Use the [CSV format and examples](format.md) and [metadata template](metadata.md).
+Stored horizons are 0–23; values for scored indicators use transformed units.
 
 ---
 
@@ -12,8 +18,8 @@ submission includes:
 1. A **forecast file** (CSV) in the `model-output/` directory
 2. A **model metadata file** (YAML) in the `model-metadata/` directory (first submission only)
 
-Submissions are automatically validated by CI and, upon passing, merged into the
-main branch.
+Submissions are automatically validated by CI. Check the results in your pull
+request before it is reviewed and merged.
 
 ---
 
@@ -68,8 +74,8 @@ See [Model Metadata](metadata.md) for the required fields.
 ### 5. Submit a pull request
 
 Push your changes and open a pull request against the `main` branch.
-The automated validation will check your files and post a comment with
-the result.
+The automated validation checks your files. Open the pull request’s Checks
+tab for results and error details.
 
 ---
 
@@ -99,7 +105,7 @@ update your PR accordingly.
     ```
 
 !!! tip "Required vs optional targets"
-    You **must** submit forecasts for: INDPRO, UNRATE, PAYEMS, CPIAUCSL.
+    You **must** submit forecasts for: INDPRO, UNRATE, CPIAUCSL.
     Other targets are optional but encouraged.
 
 !!! tip "Use the template"

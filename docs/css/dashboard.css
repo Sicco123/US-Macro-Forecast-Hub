@@ -296,3 +296,75 @@
 [data-md-color-scheme="slate"] .modebar-btn:hover path {
   fill: rgba(255, 255, 255, 0.9) !important;
 }
+
+/* Keep the existing Material theme, with accessible custom control colors. */
+:root {
+  --dash-accent: #00695c;
+  --dash-on-accent: #fff;
+  --dash-focus: #1565c0;
+  --dash-success-bg: #e8f5e9;
+  --dash-success-text: #256029;
+}
+[data-md-color-scheme="slate"] {
+  --dash-accent: #80cbc4;
+  --dash-on-accent: #172b2a;
+  --dash-focus: #90caf9;
+  --dash-success-bg: #203c2b;
+  --dash-success-text: #a5d6a7;
+}
+[hidden] { display: none !important; }
+#fc-dashboard, #eval-dashboard { min-width: 0; }
+#fc-dashboard :is(button, input, select, summary, a):focus-visible,
+#eval-dashboard :is(button, input, select, summary, a):focus-visible,
+.dash-table-scroll:focus-visible, #fc-dashboard:focus-visible {
+  outline: 3px solid var(--dash-focus);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+.dash-controls { align-items: end; gap: 12px 16px; padding: 16px; }
+.dash-controls label { flex-direction: column; align-items: start; color: var(--md-default-fg-color); }
+.dash-controls .dash-toggle { flex-direction: row; align-items: center; }
+.dash-controls :is(input[type="number"], select), .dash-btn, .dash-slider-row button {
+  min-height: 44px;
+  max-width: 100%;
+}
+.dash-btn { color: var(--dash-accent); border-color: var(--dash-accent); }
+.dash-btn:hover, .dash-slider-row button { background: var(--dash-accent); color: var(--dash-on-accent); }
+button:disabled { cursor: not-allowed; opacity: .5; }
+.dash-models { gap: 8px; padding: 8px; }
+.dash-models label { min-height: 44px; overflow-wrap: anywhere; }
+.dash-slider-row { flex-wrap: wrap; padding: 12px; }
+.dash-slider-row input[type="range"] { min-width: 100px; min-height: 44px; }
+.dash-slider-row .slider-date { color: var(--dash-accent); font-variant-numeric: tabular-nums; }
+.eval-tab { background: transparent; font-family: inherit; min-height: 44px; }
+.eval-tab-active, .eval-tab:hover { color: var(--dash-accent); }
+.eval-tab-active { border-bottom-color: var(--dash-accent); }
+.dash-table-scroll { max-width: 100%; overflow-x: auto; margin: 16px 0; }
+.eval-summary-table { font-variant-numeric: tabular-nums; }
+.eval-summary-table caption { text-align: left; padding: 12px 0; line-height: 1.5; color: var(--md-default-fg-color); }
+.eval-summary-table thead th { background: var(--dash-accent); color: var(--dash-on-accent); }
+.eval-summary-table tbody th { background: transparent; color: var(--md-default-fg-color); text-align: left; text-transform: none; letter-spacing: normal; overflow-wrap: anywhere; }
+.eval-summary-table small { display: block; font-size: .7rem; font-weight: normal; white-space: nowrap; }
+.eval-summary-table td.best, [data-md-color-scheme="slate"] .eval-summary-table td.best { background: var(--dash-success-bg); color: var(--dash-success-text); }
+.dash-sort { color: inherit; font: inherit; min-height: 44px; cursor: pointer; }
+.dash-best { display: block; font-size: .7rem; }
+.dash-freshness { font-size: .8rem; color: var(--md-default-fg-color); }
+#fc-status, #eval-status { min-height: 1.5em; }
+#fc-dashboard details, #eval-dashboard details { margin: 16px 0; }
+#fc-dashboard summary, #eval-dashboard summary { padding: 12px; cursor: pointer; font-weight: 600; }
+@media (max-width: 600px) {
+  .dash-controls { gap: 12px; }
+  .dash-controls label { width: 100%; }
+  .dash-controls select { width: 100%; }
+  .dash-slider-row input[type="range"] { order: 2; flex-basis: 100%; width: 100%; }
+  .dash-slider-row .slider-date { margin-left: auto; min-width: 0; }
+  .eval-tab { padding: 12px 16px; }
+  .dash-chart { margin: 12px 0; }
+  .eval-summary-table th, .eval-summary-table td { padding: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-chart--loading::after { animation: none; }
+  .dash-controls *, .dash-slider-row *, .dash-chart, .dash-models *, .eval-tab { transition: none; }
+  .dash-slider-row button:active { transform: none; }
+}
+.dash-pagination { display: flex; gap: 12px; margin-top: 12px; }

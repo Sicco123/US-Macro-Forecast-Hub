@@ -12,6 +12,7 @@ Output files (in docs/data/):
 """
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -197,16 +198,22 @@ def generate_scores():
                 metric_data = {}
 
                 for metric in METRICS:
-                    # SqErr values in log-diff space are tiny (≈1e-6); use 8dp.
-                    # MAE in log-diff space is also small (≈1e-3); use 6dp.
-                    decimals = 8 if metric == "SqErr" else 6
-                    vals = [None] * n_dates
+                    vals, ranks, counts = [None] * n_dates, [None] * n_dates, [0] * n_dates
                     mrows = hdf[hdf["metric"] == metric]
-                    for od, va in zip(mrows["origin_date"], mrows["value_absolute"]):
-                        idx = od_idx.get(od)
-                        if idx is not None:
-                            vals[idx] = round(float(va), decimals) if not (isinstance(va, float) and np.isnan(va)) else None
+                    # Some historical origins have multiple target dates at a stored
+                    # horizon. Preserve their weight instead of silently overwriting.
+                    cells = mrows.groupby("origin_date").agg(
+                        score=("value_absolute", "mean"), rank=("rank", "mean"),
+                        count=("value_absolute", "count"),
+                    )
+                    for od, cell in cells.iterrows():
+                        idx = od_idx[od]
+                        vals[idx] = float(cell["score"])
+                        ranks[idx] = float(cell["rank"])
+                        counts[idx] = int(cell["count"])
                     metric_data[metric] = vals
+                    metric_data[f"{metric}_rank"] = ranks
+                    metric_data[f"{metric}_count"] = counts
 
                 model_scores[hkey] = metric_data
 
@@ -247,8 +254,6 @@ def generate_scores():
 
             vals = [v for v in model_ranks.values() if v is not None]
             model_ranks["Overall"] = round(sum(vals) / len(vals), 2) if vals else None
-            vals = [v for v in model_scores.values() if v is not None]
-            model_scores["Overall"] = round(sum(vals) / len(vals), 4) if vals else None
 
             rank_data[model] = model_ranks
             score_data[model] = model_scores
@@ -262,12 +267,30 @@ def generate_scores():
     print(f"  summary.json ({len(models)} models, {len(targets)} targets)")
 
 
+def generate_status():
+    """Describe existing assets without implying they are prospective forecasts."""
+    origins, truth_dates = [], []
+    for path in OUT_DIR.glob("forecasts_*.json"):
+        origins.extend(json.loads(path.read_text())["origin_dates"])
+    truth_path = OUT_DIR / "truth.json"
+    if truth_path.exists():
+        for target in json.loads(truth_path.read_text()).values():
+            truth_dates.extend(target["dates"])
+    status = {
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "latest_origin": max(origins, default=None),
+        "truth_through": max(truth_dates, default=None),
+    }
+    (OUT_DIR / "status.json").write_text(json.dumps(status, indent=2) + "\n")
+
+
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print("Generating dashboard data...")
     generate_truth()
     generate_forecasts()
     generate_scores()
+    generate_status()
     print("Done!")
 
 

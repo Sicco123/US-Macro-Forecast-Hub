@@ -1,44 +1,33 @@
-/**
- * Live countdown to the 24-hour forecast registration window
- * (17th of each month, 00:00–23:59 US/Eastern).
- */
+/* Registration opens on the 17th, midnight to midnight in America/New_York. */
 (function () {
   "use strict";
-
   const el = document.getElementById("arena-countdown");
   if (!el) return;
-
-  // ponytail: toLocaleString timezone trick — display-only countdown,
-  // CI enforces the real deadline server-side.
-  function etNow() {
-    return new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const zone = "America/New_York";
+  const parts = (date) => Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    timeZone: zone, year: "numeric", month: "numeric", day: "numeric", hour: "numeric", hourCycle: "h23",
+  }).formatToParts(date).map((p) => [p.type, p.value]));
+  function midnight(year, month, day) {
+    const noon = new Date(Date.UTC(year, month, day, 12));
+    return new Date(+noon - Number(parts(noon).hour) * 3600000);
   }
-
-  function fmt(ms) {
-    const mins = Math.floor(ms / 60000);
-    const d = Math.floor(mins / 1440);
-    const h = Math.floor((mins % 1440) / 60);
-    const m = mins % 60;
-    return d > 0 ? `${d}d ${h}h` : `${h}h ${m}m`;
+  function duration(ms) {
+    const minutes = Math.max(0, Math.floor(ms / 60000));
+    const days = Math.floor(minutes / 1440), hours = Math.floor(minutes % 1440 / 60);
+    return days ? `${days}d ${hours}h` : `${hours}h ${minutes % 60}m`;
   }
-
   function tick() {
-    const now = etNow();
-    let open = new Date(now.getFullYear(), now.getMonth(), 17);
-    let close = new Date(now.getFullYear(), now.getMonth(), 18);
-    if (now >= close) {
-      open = new Date(now.getFullYear(), now.getMonth() + 1, 17);
-      close = new Date(now.getFullYear(), now.getMonth() + 1, 18);
-    }
-    if (now >= open) {
-      el.innerHTML = `&#128994; Registration <b>OPEN</b> &mdash; closes in ${fmt(close - now)}`;
-      el.classList.add("is-open");
-    } else {
-      el.innerHTML = `Next 24-hour registration window opens in <b>${fmt(open - now)}</b>`;
-      el.classList.remove("is-open");
-    }
+    const now = new Date(), p = parts(now);
+    let month = Number(p.month) - 1;
+    if (+p.day >= 18) month++;
+    const open = midnight(+p.year, month, 17), close = midnight(+p.year, month, 18);
+    const isOpen = now >= open && now < close;
+    const date = (d) => d.toLocaleDateString("en-US", { timeZone: zone, month: "long", day: "numeric", year: "numeric" });
+    el.textContent = isOpen
+      ? `Registration OPEN — closes ${date(close)} at 00:00 Eastern (${zone}), in ${duration(close - now)}.`
+      : `Next registration: ${date(open)}, 00:00–23:59 Eastern (${zone}). Opens in ${duration(open - now)}.`;
+    el.classList.toggle("is-open", isOpen);
   }
-
   tick();
   setInterval(tick, 30000);
 })();

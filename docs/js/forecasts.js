@@ -7,11 +7,7 @@
   const ROOT = document.getElementById("fc-dashboard");
   if (!ROOT) return;
 
-  const COLORS = [
-    "#3f51b5", "#ff7043", "#26a69a", "#ab47bc",
-    "#e65100", "#ffa726", "#ef5350", "#66bb6a",
-    "#8d6e63", "#78909c",
-  ];
+  const D = window.Dashboard;
 
   function isDark() {
     return document.body.getAttribute("data-md-color-scheme") === "slate";
@@ -33,7 +29,12 @@
   let scoresData = null;
   let currentTarget = null;
   let originDates = [];
-  let sliderIndex = 0;
+  let sliderIndex = -1;
+  let minYear = 2000, maxYear = new Date().getFullYear() + 2;
+  let requestId = 0;
+  let modelSelection = null;
+  let restoredOrigin = null;
+  let tableRows = [];
   let selectedModels = new Set();
   let modelColorMap = {};          // stable model → color mapping
   let yAxisRange = null;
@@ -55,20 +56,22 @@
   const cumChartDiv = ROOT.querySelector("#fc-cumulative-chart");
   const btnResetZoom = ROOT.querySelector("#fc-reset-zoom");
 
-  function basePath() {
-    const scripts = document.querySelectorAll("script[src]");
-    for (const s of scripts) {
-      if (s.src.includes("/js/forecasts.js"))
-        return s.src.replace("/js/forecasts.js", "/data/");
-    }
-    return "data/";
+  const status = ROOT.querySelector("#fc-status");
+  const retry = ROOT.querySelector("#fc-retry");
+  const controls = { target: selTarget, metric: selMetric, horizon: selMaxHorizon, from: yearFrom, to: yearTo };
+  const tableDiv = ROOT.querySelector("#fc-table");
+  const download = ROOT.querySelector("#fc-download");
+  const accuracy = ROOT.querySelector("#fc-accuracy");
+  function clearCharts() {
+    if (window.Plotly) [chartDiv, scoreChartDiv, cumChartDiv].forEach((d) => Plotly.purge(d));
+    tableDiv.replaceChildren(); tableRows = []; download.disabled = true;
   }
-  const DATA_BASE = basePath();
-
-  async function fetchJSON(url) {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`Failed to fetch ${url}: ${r.status}`);
-    return r.json();
+  function validRange() {
+    if (D.range(yearFrom, yearTo)) return true;
+    stopPlay(); clearCharts();
+    status.textContent = "Enter valid years with From no later than To.";
+    [slider, btnPrev, btnNext, btnPlay].forEach((el) => { el.disabled = true; });
+    return false;
   }
 
   function hexToRgba(hex, a) {
@@ -89,18 +92,9 @@
     return target;
   }
 
-  // Chart title suffix describing the transformation
-  function transformSuffix(target) {
-    const t = truthData[target];
-    if (!t) return "";
-    if (t.transform === "log_diff") return " \u2014 monthly log change";
-    if (t.transform === "diff") return " \u2014 monthly change (pp)";
-    return "";
-  }
-
   function computeYRange() {
-    const yFrom = parseInt(yearFrom.value) || 2000;
-    const yTo = parseInt(yearTo.value) || 2026;
+    const yFrom = parseInt(yearFrom.value) || minYear;
+    const yTo = parseInt(yearTo.value) || maxYear;
 
     // Observed values: collected separately and NEVER clipped — the observed
     // line must always be fully visible, even when the selected model's
@@ -116,17 +110,17 @@
         }
       });
     }
-    // Forecast envelope (q005 / q095) of the selected models: percentile-clip
-    // so stale level-space outliers can't blow the axis out
+    // Include the displayed forecast envelopes in full; do not clip uncertainty.
     const fcVals = [];
     if (fcData) {
       for (const model of Object.keys(fcData.models)) {
         if (!selectedModels.has(model)) continue;
-        for (const od of originDates) {
+        for (const od of [originDates[sliderIndex]]) {
           const e = fcData.models[model][od];
           if (!e) continue;
-          for (const v of (e.q005 || [])) if (v != null) fcVals.push(v);
-          for (const v of (e.q095 || [])) if (v != null) fcVals.push(v);
+          for (const v of (e.q005 || []).slice(0, maxHorizon)) if (v != null) fcVals.push(v);
+          for (const v of (e.q095 || []).slice(0, maxHorizon)) if (v != null) fcVals.push(v);
+          e.ted.slice(0, maxHorizon).forEach((_, i) => { const v = D.point(e, i).value; if (Number.isFinite(v)) fcVals.push(v); });
         }
       }
     }
@@ -134,9 +128,8 @@
 
     let lo = Infinity, hi = -Infinity;
     if (fcVals.length) {
-      fcVals.sort((a, b) => a - b);
-      lo = fcVals[Math.floor(fcVals.length * 0.01)];
-      hi = fcVals[Math.min(fcVals.length - 1, Math.floor(fcVals.length * 0.99))];
+      lo = Math.min(...fcVals);
+      hi = Math.max(...fcVals);
     }
     for (const v of truthVals) {
       if (v < lo) lo = v;
@@ -152,15 +145,17 @@
     if (!playTimer) return;
     clearInterval(playTimer);
     playTimer = null;
-    if (btnPlay) { btnPlay.innerHTML = "&#9654;"; btnPlay.title = "Play through origin dates"; }
+    if (btnPlay) { btnPlay.textContent = "Play"; btnPlay.setAttribute("aria-label", "Play through origin dates"); btnPlay.setAttribute("aria-pressed", "false"); }
   }
   function togglePlay() {
     if (playTimer) { stopPlay(); return; }
+    if (!fcData || !originDates.length || !validRange()) return;
     if (sliderIndex >= originDates.length - 1) {
       sliderIndex = 0; slider.value = 0; updateSliderLabel(); draw();
     }
-    btnPlay.innerHTML = "&#10074;&#10074;";
-    btnPlay.title = "Pause";
+    btnPlay.textContent = "Pause";
+    btnPlay.setAttribute("aria-label", "Pause playback");
+    btnPlay.setAttribute("aria-pressed", "true");
     playTimer = setInterval(() => {
       if (sliderIndex >= originDates.length - 1) { stopPlay(); return; }
       stepSlider(1);
@@ -169,17 +164,25 @@
 
   // --- loading / empty states ---
   function setLoading(on) {
-    [chartDiv, scoreChartDiv, cumChartDiv].forEach((d) =>
-      d.classList.toggle("dash-chart--loading", on));
+    ROOT.setAttribute("aria-busy", String(on));
+    [chartDiv, scoreChartDiv, cumChartDiv].forEach((d) => d.classList.toggle("dash-chart--loading", on));
+    [slider, btnPrev, btnNext, btnPlay].forEach((el) => { el.disabled = on || !originDates.length; });
   }
 
-  // --- shareable state: persist target in the URL hash ---
   function readHash() {
-    const t = new URLSearchParams(location.hash.slice(1)).get("target");
-    if (t && [...selTarget.options].some((o) => o.value === t)) selTarget.value = t;
+    const params = new URLSearchParams(location.search);
+    if (!params.has("target")) {
+      const legacy = new URLSearchParams(location.hash.slice(1)).get("target");
+      if (legacy) params.set("target", legacy);
+    }
+    D.restore(controls, params);
+    maxHorizon = +selMaxHorizon.value;
+    modelSelection = params.has("models") ? params.get("models").split(",") : null;
+    restoredOrigin = params.get("origin");
   }
   function writeHash() {
-    history.replaceState(null, "", "#target=" + currentTarget);
+    if (!fcData) return;
+    D.save(controls, { origin: originDates[sliderIndex] || "", models: [...selectedModels].join(",") });
   }
 
   // Find the closest origin date index to a given date string
@@ -194,10 +197,9 @@
   }
 
   async function init() {
-    truthData = await fetchJSON(DATA_BASE + "truth.json");
 
     selTarget.addEventListener("change", onTargetChange);
-    selMetric.addEventListener("change", () => { drawScoreChart(); drawCumulativeChart(); });
+    selMetric.addEventListener("change", () => { writeHash(); drawScoreChart(); drawCumulativeChart(); });
     selMaxHorizon.addEventListener("change", () => {
       maxHorizon = parseInt(selMaxHorizon.value);
       draw(); drawScoreChart(); drawCumulativeChart();
@@ -205,80 +207,89 @@
     yearFrom.addEventListener("change", onRangeChange);
     yearTo.addEventListener("change", onRangeChange);
     slider.addEventListener("input", onSliderMove);
-    btnPrev.addEventListener("click", () => stepSlider(-1));
-    btnNext.addEventListener("click", () => stepSlider(1));
+    btnPrev.addEventListener("click", () => { stopPlay(); stepSlider(-1); });
+    btnNext.addEventListener("click", () => { stopPlay(); stepSlider(1); });
     if (btnPlay) btnPlay.addEventListener("click", togglePlay);
     if (btnResetZoom) btnResetZoom.addEventListener("click", resetZoom);
 
-    document.addEventListener("keydown", (e) => {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    ROOT.addEventListener("keydown", (e) => {
+      if (e.target.closest("input, select, button, a, summary, textarea, [contenteditable]")) return;
+      if (["ArrowLeft", "ArrowRight"].includes(e.key)) { e.preventDefault(); stopPlay(); }
       if (e.key === "ArrowLeft") stepSlider(-1);
       if (e.key === "ArrowRight") stepSlider(1);
       if (e.key === " " && btnPlay) { e.preventDefault(); togglePlay(); }
     });
 
     // Redraw charts when dark/light mode toggles
-    new MutationObserver(() => { draw(); drawScoreChart(); drawCumulativeChart(); })
+    new MutationObserver(() => { Object.keys(modelColorMap).sort().forEach((m, i) => { modelColorMap[m] = D.color(i); }); draw(); drawScoreChart(); drawCumulativeChart(); })
       .observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
 
+    retry.addEventListener("click", onTargetChange);
+    accuracy.addEventListener("toggle", () => { if (accuracy.open) { drawScoreChart(); drawCumulativeChart(); } });
+    download.addEventListener("click", () => D.download(["model", "target_end_date", "statistic", "value", "q005", "q010", "q050", "q090", "q095"], tableRows, `${currentTarget}-${originDates[sliderIndex]}.csv`));
+    window.addEventListener("popstate", () => { readHash(); onTargetChange(); });
     readHash();
     await onTargetChange();
   }
 
   async function onTargetChange() {
-    stopPlay();
-    currentTarget = selTarget.value;
-    writeHash();
-    setLoading(true);
-    try { fcData = await fetchJSON(DATA_BASE + `forecasts_${currentTarget}.json`); } catch { fcData = null; }
-    try { scoresData = await fetchJSON(DATA_BASE + `scores_${currentTarget}.json`); } catch { scoresData = null; }
-    setLoading(false);
-    if (!fcData) {
-      modelBox.innerHTML = "";
-      chartDiv.innerHTML =
-        `<div class="dash-empty">No forecast data available for ${currentTarget} yet.</div>`;
-      Plotly.purge(scoreChartDiv); Plotly.purge(cumChartDiv);
-      return;
-    }
-    buildModelCheckboxes();
-    updateSlider();
-    yAxisRange = computeYRange();
-    draw();
-    drawScoreChart();
-    drawCumulativeChart();
-  }
-
-  // Model with the lowest average MAE at the current max horizon
-  function bestModel(models) {
-    if (!scoresData) return null;
-    const hk = `h${maxHorizon - 1}`;
-    let best = null, bestVal = Infinity;
-    for (const m of models) {
-      const arr = scoresData.models[m]?.[hk]?.MAE;
-      if (!arr) continue;
-      const v = arr.filter(Number.isFinite);
-      if (!v.length) continue;
-      const avg = v.reduce((a, b) => a + b, 0) / v.length;
-      if (avg < bestVal) { bestVal = avg; best = m; }
-    }
-    return best;
+    const id = ++requestId;
+    const target = selTarget.value;
+    const previousOrigin = originDates[sliderIndex];
+    if (fcData && modelSelection === null) modelSelection = [...selectedModels];
+    stopPlay(); fcData = null; scoresData = null; originDates = [];
+    clearCharts(); modelBox.replaceChildren();
+    ROOT.querySelector("#fc-description").textContent = "";
+    status.textContent = "Loading forecasts…"; retry.hidden = true; setLoading(true);
+    try {
+      const [truth, forecasts, scores] = await Promise.all([
+        D.json("truth.json"), D.json(`forecasts_${target}.json`),
+        D.json(`scores_${target}.json`).catch(() => null), D.plotly(),
+      ]);
+      if (id !== requestId) return;
+      truthData = truth; fcData = forecasts; scoresData = scores; currentTarget = target;
+      if (!forecasts.origin_dates.length) {
+        status.textContent = "No forecasts are available for this indicator yet.";
+        return;
+      }
+      minYear = +forecasts.origin_dates[0].slice(0, 4);
+      const latestYear = +forecasts.origin_dates.at(-1).slice(0, 4);
+      maxYear = latestYear + 2;
+      for (const input of [yearFrom, yearTo]) { input.min = minYear; input.max = maxYear; }
+      const params = new URLSearchParams(location.search);
+      if (!params.has("from")) yearFrom.value = Math.max(minYear, latestYear - 5);
+      if (!params.has("to")) yearTo.value = maxYear;
+      buildModelCheckboxes();
+      updateSlider();
+      const desired = restoredOrigin || previousOrigin;
+      sliderIndex = desired && originDates.includes(desired) ? originDates.indexOf(desired) : originDates.length - 1;
+      restoredOrigin = null; modelSelection = null;
+      slider.value = Math.max(0, sliderIndex); updateSliderLabel();
+      yAxisRange = computeYRange();
+      draw(); drawScoreChart(); drawCumulativeChart();
+      if (!scores) { status.textContent = "Forecasts loaded. Accuracy data could not load. Retry to recover it."; retry.hidden = false; }
+    } catch {
+      if (id !== requestId) return;
+      clearCharts(); status.textContent = "Could not load forecasts. Check your connection and retry."; retry.hidden = false;
+    } finally { if (id === requestId) { setLoading(false); updateSliderLabel(); } }
   }
 
   function buildModelCheckboxes() {
     if (!fcData) return;
     const models = Object.keys(fcData.models).sort();
-    // Default: only the best-scoring model on — less clutter, users opt in to more
-    const best = bestModel(models);
-    selectedModels = best ? new Set([best]) : new Set(models);
+    selectedModels = modelSelection === null
+      ? new Set(models.filter((m) => fcData.models[m][fcData.origin_dates.at(-1)]))
+      : new Set(modelSelection.filter((m) => models.includes(m)));
+    if (modelSelection === null && !selectedModels.size && models.length) selectedModels.add(models[0]);
     // Stable color map: sorted order determines color, never changes on selection
     modelColorMap = {};
-    models.forEach((m, i) => { modelColorMap[m] = COLORS[i % COLORS.length]; });
+    models.forEach((m, i) => { modelColorMap[m] = D.color(i); });
     modelBox.innerHTML = models
       .map((m) => {
         const c = modelColorMap[m];
         const chk = selectedModels.has(m) ? "checked" : "";
-        return `<label><input type="checkbox" value="${m}" ${chk}
-                 style="accent-color:${c}"> <span style="color:${c}; font-weight:600">●</span> ${m}</label>`;
+        return `<label><input type="checkbox" value="${D.escape(m)}" ${chk}
+                 style="accent-color:${c}"> <span style="color:${c}; font-weight:600" aria-hidden="true">●</span> ${D.escape(m)}</label>`;
       })
       .join("");
     modelBox.querySelectorAll("input").forEach((cb) => {
@@ -293,8 +304,8 @@
 
   function updateSlider() {
     if (!fcData) return;
-    const yFrom = parseInt(yearFrom.value) || 2000;
-    const yTo = parseInt(yearTo.value) || 2026;
+    const yFrom = parseInt(yearFrom.value) || minYear;
+    const yTo = parseInt(yearTo.value) || maxYear;
     originDates = fcData.origin_dates.filter((d) => {
       const y = parseInt(d.slice(0, 4));
       return y >= yFrom && y <= yTo;
@@ -308,12 +319,13 @@
 
   function resetZoom() {
     // Reset year inputs to full range and redraw all charts from scratch
-    yearFrom.value = 2000;
-    yearTo.value = 2026;
+    yearFrom.value = minYear;
+    yearTo.value = maxYear;
     onRangeChange();
   }
 
   function onRangeChange() {
+    if (!validRange()) return;
     updateSlider();
     yAxisRange = computeYRange();
     draw(); drawScoreChart(); drawCumulativeChart();
@@ -327,42 +339,19 @@
   }
 
   function stepSlider(delta) {
-    // Step through the FULL origin list; if the next origin falls outside the
-    // current zoom window, slide the window along (width preserved) so the
-    // arrows/autoplay are never stopped by the zoom.
-    const all = fcData ? fcData.origin_dates : originDates;
-    const cur = originDates[sliderIndex];
-    const gi = Math.max(0, Math.min(all.length - 1, all.indexOf(cur) + delta));
-    const next = all[gi];
-    const ny = parseInt(next.slice(0, 4));
-    const yF = parseInt(yearFrom.value) || 2000;
-    const yT = parseInt(yearTo.value) || 2026;
-
-    if (ny < yF || ny + 2 > yT) {
-      const span = yT - yF;
-      let nF = delta > 0 ? Math.min(2026, ny + 2) - span : ny;
-      nF = Math.max(2000, Math.min(nF, 2026 - span));
-      const nT = nF + span;
-      if (nF !== yF || nT !== yT) {
-        yearFrom.value = nF;
-        yearTo.value = nT;
-        updateSlider();
-        yAxisRange = computeYRange();
-        sliderIndex = Math.max(0, originDates.indexOf(next));
-        slider.value = sliderIndex;
-        updateSliderLabel();
-        draw(); drawScoreChart(); drawCumulativeChart();
-        return;
-      }
-    }
+    if (!fcData || !originDates.length || !validRange()) return;
     sliderIndex = Math.max(0, Math.min(originDates.length - 1, sliderIndex + delta));
-    slider.value = sliderIndex;
-    updateSliderLabel();
-    draw();
+    slider.value = sliderIndex; updateSliderLabel(); draw();
   }
 
   function updateSliderLabel() {
-    sliderLabel.textContent = originDates[sliderIndex] || "\u2014";
+    const date = originDates[sliderIndex];
+    sliderLabel.textContent = date || "No origins";
+    slider.setAttribute("aria-valuetext", date || "No forecast origins in this range");
+    const unavailable = !date || ROOT.getAttribute("aria-busy") === "true" || !D.range(yearFrom, yearTo);
+    slider.disabled = btnPlay.disabled = unavailable;
+    btnPrev.disabled = unavailable || sliderIndex <= 0;
+    btnNext.disabled = unavailable || sliderIndex >= originDates.length - 1;
   }
 
   function syncYearsFromPlotly(eventData) {
@@ -370,16 +359,16 @@
       const newFrom = parseInt(eventData["xaxis.range[0]"].slice(0, 4));
       const newTo = parseInt(eventData["xaxis.range[1]"].slice(0, 4));
       if (!isNaN(newFrom) && !isNaN(newTo)) {
-        yearFrom.value = Math.max(2000, newFrom);
-        yearTo.value = Math.min(2026, newTo);
+        yearFrom.value = Math.max(minYear, newFrom);
+        yearTo.value = Math.min(maxYear, newTo);
         updateSlider();
         yAxisRange = computeYRange();
         draw(); drawScoreChart(); drawCumulativeChart();
       }
     }
     if (eventData["xaxis.autorange"]) {
-      yearFrom.value = 2000;
-      yearTo.value = 2026;
+      yearFrom.value = minYear;
+      yearTo.value = maxYear;
       updateSlider();
       yAxisRange = computeYRange();
       draw(); drawScoreChart(); drawCumulativeChart();
@@ -388,11 +377,18 @@
 
   // --- main forecast chart ---
   function draw() {
-    if (!fcData || originDates.length === 0) { Plotly.purge(chartDiv); return; }
+    if (!fcData || !window.Plotly || !validRange()) return;
+    writeHash(); updateSliderLabel();
+    if (!originDates.length) { clearCharts(); status.textContent = "No forecast origins in this range. Widen the dates or reset zoom."; return; }
+    status.textContent = selectedModels.size ? `Showing ${selectedModels.size} model(s) at origin ${originDates[sliderIndex]}.` : "Select a model to show its forecast.";
+    yAxisRange = computeYRange();
+    renderTable();
+    if (selectedModels.size && !tableRows.length) status.textContent = "No forecasts for these models at this origin. Choose another origin or model.";
 
     const originDate = originDates[sliderIndex];
-    const yFrom = parseInt(yearFrom.value) || 2000;
-    const yTo = parseInt(yearTo.value) || 2026;
+    ROOT.querySelector("#fc-description").textContent = `${selTarget.selectedOptions[0].textContent}. Origin ${originDate}; up to ${maxHorizon} monthly steps. Units: ${yAxisLabel(currentTarget)}. Exact values and intervals are in the table below.`;
+    const yFrom = parseInt(yearFrom.value) || minYear;
+    const yTo = parseInt(yearTo.value) || maxYear;
     const traces = [];
 
     const t = truthData[currentTarget];
@@ -442,12 +438,14 @@
         });
       }
       // Point forecast: show mean (falling back to Q0.5 if mean unavailable)
-      const pointY = sl(entry.mean || entry.q050);
+      const points = teds.map((_, i) => D.point(entry, i));
+      const pointY = points.map((p) => p.value);
       traces.push({
         x: teds, y: pointY, mode: "lines+markers", name: model,
-        line: { color: color, width: 2.8 },
+        line: { color: color, width: 2.8, dash: D.dashes[Object.keys(fcData.models).sort().indexOf(model) % D.dashes.length] },
         marker: { size: 6, color: color },
-        hovertemplate: "%{x|%b %Y}<br>Mean: %{y:.2f}<extra>" + model + "</extra>",
+        customdata: points.map((p) => p.statistic),
+        hovertemplate: "%{x|%b %Y}<br>%{customdata}: %{y:.6g}<extra>" + D.escape(model) + "</extra>",
       });
     });
 
@@ -470,7 +468,7 @@
 
     const layout = {
       font: plotlyFont(),
-      title: { text: currentTarget + transformSuffix(currentTarget), font: { size: 16, color: titleColor }, x: 0.01 },
+      title: { text: currentTarget, font: { size: 16, color: titleColor }, x: 0.01 },
       xaxis: {
         range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
         ...plotlyGrid(), tickformat: "%Y",
@@ -482,10 +480,10 @@
       },
       shapes, annotations,
       legend: { orientation: "h", y: -0.12, x: 0.5, xanchor: "center",
-                font: { size: 12 }, bgcolor: "rgba(0,0,0,0)" },
-      margin: { t: 40, r: 16, b: 60, l: 65 },
+                font: { size: 13 }, bgcolor: "rgba(0,0,0,0)" },
+      margin: { t: 40, r: 16, b: 60, l: chartDiv.clientWidth < 500 ? 48 : 65 },
       hovermode: "x unified", hoverlabel: { bgcolor: dark ? "#2e2e2e" : "#fff", font: { color: dark ? "#ddd" : "#333" } },
-      height: 500,
+      height: chartDiv.clientWidth < 500 ? 420 : 500,
       plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
     };
 
@@ -497,6 +495,7 @@
     // Click on chart to jump forecast origin to the closest date
     chartDiv.on("plotly_click", function (data) {
       if (data.points && data.points.length > 0) {
+        stopPlay();
         const clickedDate = data.points[0].x;
         const idx = findClosestOrigin(clickedDate);
         sliderIndex = idx;
@@ -509,6 +508,7 @@
 
   // --- score chart (rolling metric) — single horizon only (maxHorizon) ---
   function drawScoreChart() {
+    if (!window.Plotly || !accuracy.open || !validRange()) return;
     if (!scoresData || originDates.length === 0) { Plotly.purge(scoreChartDiv); return; }
 
     const metricKey = selMetric.value;
@@ -516,8 +516,8 @@
     const displayName = isRMSE ? "RMSE" : metricKey;
 
     const models = Object.keys(scoresData.models).sort().filter((m) => selectedModels.has(m));
-    const yFrom = parseInt(yearFrom.value) || 2000;
-    const yTo = parseInt(yearTo.value) || 2026;
+    const yFrom = parseInt(yearFrom.value) || minYear;
+    const yTo = parseInt(yearTo.value) || maxYear;
     const traces = [];
 
     // Use only the selected max horizon (data keys are h0, h1, ... where h0 = horizon 1)
@@ -548,8 +548,8 @@
 
       traces.push({
         x: filtDates, y: rolling, mode: "lines", name: model,
-        line: { color: color, width: 2.2 },
-        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.4f}<extra>" + model + "</extra>",
+        line: { color: color, width: 2.2, dash: D.dashes[Object.keys(fcData.models).sort().indexOf(model) % D.dashes.length] },
+        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.6g}<extra>" + model + "</extra>",
       });
     });
 
@@ -564,8 +564,8 @@
       },
       yaxis: { title: { text: displayName, standoff: 10 }, ...plotlyGrid() },
       legend: { orientation: "h", y: -0.18, x: 0.5, xanchor: "center",
-                font: { size: 12 }, bgcolor: "rgba(0,0,0,0)" },
-      margin: { t: 36, r: 16, b: 70, l: 65 },
+                font: { size: 13 }, bgcolor: "rgba(0,0,0,0)" },
+      margin: { t: 36, r: 16, b: 70, l: chartDiv.clientWidth < 500 ? 48 : 65 },
       hovermode: "x unified", hoverlabel: { bgcolor: dark2 ? "#2e2e2e" : "#fff", font: { color: dark2 ? "#ddd" : "#333" } },
       height: 340,
       plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
@@ -578,6 +578,7 @@
 
   // --- cumulative error chart (only for MAE and RMSE) — single horizon only ---
   function drawCumulativeChart() {
+    if (!window.Plotly || !accuracy.open || !validRange()) return;
     const metricKey = selMetric.value;
     if (metricKey !== "MAE" && metricKey !== "SqErr") {
       Plotly.purge(cumChartDiv);
@@ -592,8 +593,8 @@
     const displayName = isRMSE ? "Cumulative Squared Error" : "Cumulative Absolute Error";
 
     const models = Object.keys(scoresData.models).sort().filter((m) => selectedModels.has(m));
-    const yFrom = parseInt(yearFrom.value) || 2000;
-    const yTo = parseInt(yearTo.value) || 2026;
+    const yFrom = parseInt(yearFrom.value) || minYear;
+    const yTo = parseInt(yearTo.value) || maxYear;
     const traces = [];
 
     // Use only the selected max horizon
@@ -619,16 +620,16 @@
 
       traces.push({
         x: filtDates, y: cumVals, mode: "lines", name: model,
-        line: { color: color, width: 2.2 },
+        line: { color: color, width: 2.2, dash: D.dashes[Object.keys(fcData.models).sort().indexOf(model) % D.dashes.length] },
         fill: "tozeroy", fillcolor: hexToRgba(color, 0.08),
-        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.2f}<extra>" + model + "</extra>",
+        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.6g}<extra>" + model + "</extra>",
       });
     });
 
     const dark3 = isDark();
     const layout = {
       font: plotlyFont(),
-      title: { text: `${displayName} — horizon ${maxHorizon}`, font: { size: 14, color: dark3 ? "#ccc" : "#555" }, x: 0.01 },
+      title: { text: `Total ${isRMSE ? "squared" : "absolute"} error — step ${maxHorizon}`, font: { size: 14, color: dark3 ? "#ccc" : "#555" }, x: 0.01 },
       xaxis: {
         range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
         ...plotlyGrid(), tickformat: "%Y",
@@ -636,8 +637,8 @@
       },
       yaxis: { title: { text: displayName, standoff: 10 }, ...plotlyGrid() },
       legend: { orientation: "h", y: -0.18, x: 0.5, xanchor: "center",
-                font: { size: 12 }, bgcolor: "rgba(0,0,0,0)" },
-      margin: { t: 36, r: 16, b: 70, l: 75 },
+                font: { size: 13 }, bgcolor: "rgba(0,0,0,0)" },
+      margin: { t: 36, r: 16, b: 70, l: chartDiv.clientWidth < 500 ? 48 : 75 },
       hovermode: "x unified", hoverlabel: { bgcolor: dark3 ? "#2e2e2e" : "#fff", font: { color: dark3 ? "#ddd" : "#333" } },
       height: 340,
       plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
@@ -646,6 +647,21 @@
     Plotly.react(cumChartDiv, traces, layout, PLOTLY_CONFIG);
     cumChartDiv.removeAllListeners && cumChartDiv.removeAllListeners("plotly_relayout");
     cumChartDiv.on("plotly_relayout", syncYearsFromPlotly);
+  }
+
+  function renderTable() {
+    tableRows = [];
+    for (const model of [...selectedModels].sort()) {
+      const entry = fcData.models[model]?.[originDates[sliderIndex]];
+      if (!entry) continue;
+      entry.ted.slice(0, maxHorizon).forEach((date, i) => {
+        const point = D.point(entry, i);
+        tableRows.push([model, date, point.statistic, point.value, ...["q005", "q010", "q050", "q090", "q095"].map((q) => entry[q]?.[i] ?? null)]);
+      });
+    }
+    download.disabled = !tableRows.length;
+    if (!tableRows.length) { tableDiv.textContent = "No forecasts for the selected models and origin."; return; }
+    D.table(tableDiv, ["Model", "Target month", "Statistic", "Value", "5%", "10%", "Median", "90%", "95%"], tableRows.map((r) => r.map((v, i) => i < 3 ? v : D.format(v))), `${currentTarget} at origin ${originDates[sliderIndex]} — ${yAxisLabel(currentTarget)}`);
   }
 
   if (document.readyState === "loading") {

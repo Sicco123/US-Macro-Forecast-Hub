@@ -88,8 +88,7 @@ markdown_extensions:
       permalink: true
 
 extra_javascript:
-  - https://cdn.plot.ly/plotly-2.35.2.min.js
-  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+  - js/dashboard.js
   - js/mathjax-config.js
   - js/forecasts.js
   - js/evaluation.js

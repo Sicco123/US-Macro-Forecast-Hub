@@ -1,15 +1,20 @@
 <div class="arena-hero" markdown="0">
-  <span class="arena-live">Live Arena</span>
+  <span class="arena-live">Forecasting research</span>
   <h1>Macro Forecast Hub</h1>
-  <p>A live forecasting arena for U.S. macroeconomic indicators from the
-  FRED-MD monthly dataset &mdash; probabilistic forecasts, pre-registered and
-  scored on the unknown future.</p>
+  <p>Explore probabilistic forecasts of U.S. macroeconomic indicators,
+  compare model accuracy, and contribute your forecasts.</p>
   <div class="arena-cta">
-    <a href="evaluation/leaderboard/">View Leaderboard →</a>
-    <a class="secondary" href="participate/how-to-submit/">Enter the Arena</a>
+    <a href="forecasts/latest/">Explore forecasts →</a>
+    <a class="secondary" href="evaluation/leaderboard/">View leaderboard</a>
+    <a class="secondary" href="participate/how-to-submit/">Submit forecasts</a>
   </div>
   <div class="arena-countdown" id="arena-countdown"></div>
 </div>
+
+<p class="dash-freshness" data-dashboard-freshness></p>
+
+The explorer and rankings include historical backfills. Historical performance
+is distinct from forecasts submitted during a prospective registration window.
 
 ---
 
@@ -25,7 +30,7 @@ macroeconomic forecasting.
 
 | Feature | Description |
 |---------|-------------|
-| **12 Target Indicators** | Core macro series from FRED-MD including output, employment, prices, and interest rates |
+| **12 Configured Indicators** | Four currently visualized and scored: INDPRO, CPIAUCSL, PCEPI, and UNRATE |
 | **Probabilistic Forecasts** | Predictive distributions via 5 quantile levels (0.05, 0.1, 0.5, 0.9, 0.95) |
 | **24-Hour Registration** | Forecasts pre-registered during a strict 24-hour window on the 17th of each month |
 | **1-24 Month Horizons** | Monthly forecast horizons up to 2 years ahead |

@@ -47,14 +47,15 @@ sample period).
 
 ## Beating the naive benchmark
 
-Following the Meese–Rogoff tradition, every score is also reported **relative
-to a naive benchmark** (`MacroHub-RandomWalk`):
+The downloadable score files include per-cell errors **relative to a naive
+benchmark** (`MacroHub-RandomWalk`); the dashboard displays absolute scores:
 
 $$
 \text{Relative score} = \frac{\text{model score}}{\text{benchmark score}}
 $$
 
-Values **below 1.0** mean the model beats the naive forecast — the first bar
+For stored `SqErr` rows, this is a squared-error ratio, not an aggregate RMSE
+ratio. Values **below 1.0** mean the model beats the naive forecast — the first bar
 any macro forecasting model has to clear.
 
 The benchmark is the appropriate naive rule for each space:
@@ -70,9 +71,12 @@ The benchmark is the appropriate naive rule for each space:
 
 ## Rankings
 
-Within each (target, month, horizon) cell, models are ranked 1…N by score
-(lower is better). The leaderboard reports **average ranks** across cells,
-which is robust to the occasional blow-up month dominating a mean score.
+Within each (target, target month, horizon, location, metric) cell, models are
+ranked by score (lower is better). Ties share the minimum rank: 1, 1, 3. The
+leaderboard averages these cell ranks over the selected origins and horizons.
+Overall rank averages target-level ranks; coverage is shown alongside each value.
+Absolute scores are reported separately by target because the units differ.
+RMSE is the square root of mean squared error across the selected scored cells.
 
 ---
 
@@ -88,8 +92,9 @@ the headline metrics.
 ## Evaluation schedule
 
 Forecasts are scored once FRED-MD releases the target month (~10th of the
-following month). Because FRED-MD data are revised, scoring uses the
-**first-release vintage**; scores may be recomputed against revised data.
+following month). The current scoring script uses `latest-target_values.csv`, so it evaluates
+against the latest downloaded vintage. Historical backfills and revised truth
+are included; these results do not establish first-release, real-time performance.
 
 ---
 

@@ -22,12 +22,13 @@ by:
 
 1. **Snapshots**: Each FRED-MD download is saved as a dated snapshot in
    `target-data/snapshots/`
-2. **First-release scoring**: Initial forecast evaluation uses the first
-   available vintage
-3. **Revised scoring**: Scores may be updated against later vintages
+2. **Current scoring**: The scoring script reads the latest downloaded target
+   values, including revisions
+3. **Historical results**: Backfills are included and do not establish
+   first-release, real-time performance
 
-This approach mirrors real-time forecasting conditions and ensures fair
-evaluation.
+Snapshots are preserved for inspection; vintage-specific evaluation is not
+currently implemented by the scoring script.
 
 ---
 

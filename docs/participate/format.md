@@ -23,7 +23,7 @@ model-output/{team_abbr}-{model_abbr}/YYYY-MM-DD-{team_abbr}-{model_abbr}.csv
 | `origin_date` | date (YYYY-MM-DD) | Date the forecast was made |
 | `target` | string | FRED series identifier (e.g., `INDPRO`, `UNRATE`) |
 | `target_end_date` | date (YYYY-MM-DD) | Last day of the month being forecasted |
-| `horizon` | integer | Months ahead: 1 through 24 |
+| `horizon` | integer | Zero-based step, 0–23. The dashboard displays steps 1–24. |
 | `location` | string | Location code (`US`) |
 | `output_type` | string | `quantile` or `mean` |
 | `output_type_id` | float/string | Quantile level (e.g., `0.5`) or empty for mean |
@@ -67,17 +67,23 @@ The remaining 9 indicators are optional.
 
 ## Example
 
+This excerpt assumes the latest observation is March 2026: stored horizon `0`
+targets April, and `1` targets May. The first step is the month after the latest
+observation available to the model, not necessarily the month after the origin.
+Include all five quantiles for each target and horizon you submit, and include
+all three required indicators in the complete file.
+
 ```csv
 origin_date,target,target_end_date,horizon,location,output_type,output_type_id,value
-2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.05,-0.003
-2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.1,0.0
-2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.5,0.002
-2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.9,0.005
-2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.95,0.007
-2026-04-17,INDPRO,2026-05-31,1,US,mean,,0.002
-2026-04-17,INDPRO,2026-06-30,2,US,quantile,0.05,-0.004
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.05,-0.003
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.1,0.0
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.5,0.002
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.9,0.005
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.95,0.007
+2026-04-17,INDPRO,2026-04-30,0,US,mean,,0.002
+2026-04-17,INDPRO,2026-05-31,1,US,quantile,0.05,-0.004
 ...
-2026-04-17,UNRATE,2026-05-31,1,US,quantile,0.05,-0.2
+2026-04-17,UNRATE,2026-04-30,0,US,quantile,0.05,-0.2
 ...
 ```
 

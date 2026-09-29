@@ -1,0 +1,126 @@
+/* Shared behavior for the two vanilla-JavaScript dashboards. */
+(function () {
+  "use strict";
+  const base = new URL("../data/", document.currentScript.src);
+  const cache = new Map();
+  let plotlyPromise;
+  const D = window.Dashboard = {
+    color: (i) => (document.body.getAttribute("data-md-color-scheme") === "slate"
+      ? ["#9ab5ff", "#ffb380", "#80cbc4", "#df9bea", "#cbb5aa"]
+      : ["#4055a8", "#b34800", "#007f73", "#9a3caf", "#795548"])[i % 5],
+    dashes: ["solid", "dash", "dot", "dashdot", "longdash"],
+    escape: (value) => String(value).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]),
+    format: (value) => Number.isFinite(value) ? value.toLocaleString(undefined, { maximumSignificantDigits: 6 }) : "—",
+    point: (entry, i) => Number.isFinite(entry.mean?.[i])
+      ? { value: entry.mean[i], statistic: "Mean" }
+      : { value: entry.q050?.[i] ?? null, statistic: "Median" },
+    json(name) {
+      if (!cache.has(name)) {
+        cache.set(name, fetch(new URL(name, base), { signal: AbortSignal.timeout(20000) }).then((r) => {
+          if (!r.ok) throw new Error(`Data request failed (${r.status})`);
+          return r.json();
+        }).catch((e) => { cache.delete(name); throw e; }));
+      }
+      return cache.get(name);
+    },
+    plotly() {
+      if (window.Plotly) return Promise.resolve();
+      if (!plotlyPromise) plotlyPromise = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdn.plot.ly/plotly-2.35.2.min.js";
+        script.onload = resolve;
+        script.onerror = () => { script.remove(); plotlyPromise = null; reject(new Error("Chart library could not load")); };
+        document.head.append(script);
+      });
+      return plotlyPromise;
+    },
+    range(from, to) {
+      const valid = from.value !== "" && to.value !== "" && from.validity.valid && to.validity.valid && +from.value <= +to.value;
+      from.setAttribute("aria-invalid", String(!valid));
+      to.setAttribute("aria-invalid", String(!valid));
+      return valid;
+    },
+    restore(controls, params = new URLSearchParams(location.search)) {
+      for (const [key, input] of Object.entries(controls)) {
+        if (!params.has(key)) continue;
+        const v = params.get(key);
+        if (input.type === "checkbox") input.checked = v !== "false";
+        else if (input.tagName === "SELECT") {
+          if ([...input.options].some((o) => o.value === v)) input.value = v;
+        } else if (/^\d{4}$/.test(v) && +v >= +input.min && +v <= +input.max) input.value = v;
+      }
+    },
+    save(controls, extra = {}) {
+      const url = new URL(location.href);
+      for (const [key, input] of Object.entries(controls)) url.searchParams.set(key, input.type === "checkbox" ? input.checked : input.value);
+      for (const [key, value] of Object.entries(extra)) url.searchParams.set(key, value);
+      // Replace filters in the current entry: browser Back still returns to the previous page.
+      history.replaceState(null, "", url);
+    },
+    table(container, headers, rows, caption) {
+      let page = 0;
+      const render = () => {
+        const start = page * 100;
+        container.innerHTML = `<table class="eval-summary-table"><caption>${D.escape(caption)} — rows ${rows.length ? start + 1 : 0}–${Math.min(start + 100, rows.length)} of ${rows.length}</caption><thead><tr>${headers.map((h) => `<th scope="col">${D.escape(h)}</th>`).join("")}</tr></thead><tbody>${rows.slice(start, start + 100).map((row) => `<tr>${row.map((v, i) => `<${i ? "td" : 'th scope="row"'}>${D.escape(v)}</${i ? "td" : "th"}>`).join("")}</tr>`).join("")}</tbody></table>`;
+        if (rows.length <= 100) return;
+        const nav = document.createElement("div");
+        nav.className = "dash-pagination";
+        for (const [label, delta, disabled] of [["Previous rows", -1, !page], ["Next rows", 1, start + 100 >= rows.length]]) {
+          const button = document.createElement("button");
+          button.textContent = label; button.className = "dash-btn"; button.disabled = disabled;
+          button.addEventListener("click", () => { page += delta; render(); container.focus(); });
+          nav.append(button);
+        }
+        container.append(nav);
+      };
+      render();
+    },
+    download(headers, rows, name) {
+      const quote = (v) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+      const blob = new Blob([[headers, ...rows].map((r) => r.map(quote).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob); link.download = name;
+      link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    },
+    // Rank each origin/horizon cell before averaging. Equal values share the minimum rank.
+    summarize(data, metric, { horizon, yFrom, yTo, includeCovid }) {
+      const result = {};
+      for (const [target, sd] of Object.entries(data)) {
+        const models = Object.keys(sd.models);
+        const sums = Object.fromEntries(models.map((m) => [m, { score: 0, rank: 0, count: 0 }]));
+        const hKeys = [...new Set(models.flatMap((m) => Object.keys(sd.models[m])))].filter((h) => horizon === "all" || h === `h${horizon}`);
+        sd.origin_dates.forEach((date, i) => {
+          const year = +date.slice(0, 4), month = date.slice(0, 7);
+          if (year < yFrom || year > yTo || (!includeCovid && month >= "2020-03" && month <= "2021-06")) return;
+          for (const h of hKeys) {
+            const cell = models.map((m) => ({ m, v: sd.models[m][h]?.[metric]?.[i] })).filter((x) => Number.isFinite(x.v)).sort((a, b) => a.v - b.v);
+            let rank = 1;
+            cell.forEach(({ m, v }, j) => {
+              if (j === 0 || v !== cell[j - 1].v) rank = j + 1;
+              const weight = sd.models[m][h]?.[`${metric}_count`]?.[i] ?? 1;
+              sums[m].score += v * weight;
+              const storedRank = sd.models[m][h]?.[`${metric}_rank`]?.[i];
+              sums[m].rank += (Number.isFinite(storedRank) ? storedRank : rank) * weight;
+              sums[m].count += weight;
+            });
+          }
+        });
+        for (const [m, s] of Object.entries(sums)) {
+          result[m] ||= {};
+          result[m][target] = { count: s.count,
+            rank: s.count ? s.rank / s.count : null,
+            score: s.count ? (metric === "SqErr" ? Math.sqrt(s.score / s.count) : s.score / s.count) : null };
+        }
+      }
+      return result;
+    },
+  };
+  document.querySelectorAll("[data-dashboard-freshness]").forEach(async (el) => {
+    try {
+      const m = await D.json("status.json");
+      el.textContent = `Latest forecast origin: ${m.latest_origin || "unavailable"}. Observations through ${m.truth_through || "unavailable"}. Dashboard generated ${m.generated_at}. Includes historical backfills.`;
+    } catch { el.textContent = "Data freshness unavailable. Historical backfills are included."; }
+  });
+})();

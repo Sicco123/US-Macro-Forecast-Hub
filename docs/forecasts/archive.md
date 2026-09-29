@@ -1,28 +1,18 @@
 # Forecast Archive
 
-All historical forecasts are preserved in the repository, organized by model
-and submission date. The backfill covers **January 2000 through March 2026**
-(315 monthly origins per model).
+Historical forecasts are preserved by model and origin date in the repository.
+Use the [forecast explorer](latest.md) to select an origin, inspect its prediction
+intervals, and download the selected values.
 
----
+<p class="dash-freshness" data-dashboard-freshness></p>
 
-## Models
+The archive includes retrospective backfills as well as later forecast files.
+Backfilled origins should not be interpreted as prospective registrations.
+Model availability varies by origin; the explorer lists the available models.
 
-### MacroHub-RandomWalk (Random Walk)
-
-- **316 forecast files** (2000-01-17 to 2026-04-13)
-- Targets: INDPRO, CPIAUCSL, PCEPI, UNRATE
-- Point forecast = last observed value
-- Quantiles from empirical h-step random-walk error distribution
-
-### BASELINE-ARMA_BIC
-
-- **316 forecast files** (2000-01-17 to 2026-04-15)
-- Targets: INDPRO, CPIAUCSL, PCEPI, UNRATE
-- ARIMA(p,d,q) with FRED-MD transformations; orders selected by BIC
-- Quantiles from Gaussian predictive distribution, inverted to levels
-
----
+Forecasts for INDPRO, CPIAUCSL, and PCEPI use monthly log changes; UNRATE uses
+monthly changes in percentage points. See [the methodology](../evaluation/methodology.md)
+for the benchmark and scoring definitions.
 
 ## Directory Structure
 

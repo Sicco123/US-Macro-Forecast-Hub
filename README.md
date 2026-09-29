@@ -2,8 +2,8 @@
 
 A live forecasting arena for probabilistic forecasting of key U.S. macroeconomic
 indicators from the [FRED-MD](https://research.stlouisfed.org/econ/mccracken/fred-databases/)
-monthly dataset — forecasts are pre-registered in a strict 24-hour window and
-scored on the unknown future.
+monthly dataset. New submissions use a strict 24-hour registration window.
+The explorer and leaderboard also include retrospective historical backfills.
 
 <div align="center">
 
@@ -50,7 +50,7 @@ forecast combining the wisdom of all participants.
 |---|-----|-----------|----------|----------|
 | 1 | `INDPRO` | Industrial Production Index | Real Activity | Yes |
 | 2 | `UNRATE` | Unemployment Rate | Labor Market | Yes |
-| 3 | `PAYEMS` | Total Nonfarm Payrolls | Labor Market | Yes |
+| 3 | `PAYEMS` | Total Nonfarm Payrolls | Labor Market | |
 | 4 | `CPIAUCSL` | Consumer Price Index | Prices | Yes |
 | 5 | `PCEPI` | PCE Price Index | Prices | |
 | 6 | `FEDFUNDS` | Federal Funds Rate | Interest Rates | |
@@ -64,7 +64,7 @@ forecast combining the wisdom of all participants.
 ### Forecast Specifications
 
 - **Frequency:** Monthly
-- **Horizons:** 1 through 24 months ahead
+- **Horizons:** 24 monthly steps, stored as `0` through `23`; the first step is the month after the latest observation available to the model
 - **Output:** 5 quantile levels (0.05, 0.1, 0.5, 0.9, 0.95) + optional mean
 - **Submission window:** 24 hours — the 17th of each month, 00:00–23:59 US/Eastern (enforced by CI)
 - **Evaluation metrics:** MAE (median forecast) and RMSE (mean forecast), absolute and relative to the naive benchmark
@@ -120,12 +120,12 @@ See [docs/participate/](docs/participate/) for detailed instructions.
 
 ```csv
 origin_date,target,target_end_date,horizon,location,output_type,output_type_id,value
-2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.05,99.5
-2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.1,100.1
-2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.5,102.3
-2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.9,104.5
-2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.95,105.2
-2026-04-17,INDPRO,2026-04-30,0,US,mean,,102.4
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.05,-0.003
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.1,0.0
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.5,0.002
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.9,0.005
+2026-04-17,INDPRO,2026-04-30,0,US,quantile,0.95,0.007
+2026-04-17,INDPRO,2026-04-30,0,US,mean,,0.002
 ...
 ```
 
@@ -182,3 +182,10 @@ maintained by the Federal Reserve Bank of St. Louis.
 - **Code:** MIT License
 - **Forecast data:** As specified in each model's metadata
 - **Target data:** Subject to FRED terms of use
+
+## Dashboard checks
+
+Run `node tests/dashboard.cjs` for the dashboard regression checks (Node.js,
+no packages required), then `mkdocs build --strict` to validate the site.
+The checks cover data aggregation and interaction logic using DOM/Plotly doubles;
+viewport, screen-reader, and browser rendering still require a browser check.

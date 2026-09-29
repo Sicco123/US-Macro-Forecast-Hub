@@ -1,7 +1,7 @@
 # Indicator Overview
 
 The Macro Forecast Hub tracks 12 monthly U.S. macroeconomic indicators from
-the FRED-MD dataset. Four are required for all submissions; eight are optional.
+the FRED-MD dataset. Three are required for all submissions; nine are optional.
 
 ---
 
@@ -25,14 +25,6 @@ These must be included in every forecast submission.
 - **Description:** Percentage of the labor force that is unemployed. One of
   the most closely watched labor market indicators.
 
-### PAYEMS — Total Nonfarm Payrolls
-
-- **Category:** Labor Market
-- **Units:** Thousands of persons
-- **Seasonal Adjustment:** Yes
-- **Description:** Total number of nonfarm employees. The headline employment
-  figure from the monthly jobs report.
-
 ### CPIAUCSL — Consumer Price Index
 
 - **Category:** Prices
@@ -44,6 +36,14 @@ These must be included in every forecast submission.
 ---
 
 ## Optional Indicators
+
+### PAYEMS — Total Nonfarm Payrolls
+
+- **Category:** Labor Market
+- **Units:** Thousands of persons
+- **Seasonal Adjustment:** Yes
+- **Description:** Total number of nonfarm employees. The headline employment
+  figure from the monthly jobs report.
 
 ### PCEPI — PCE Price Index
 
