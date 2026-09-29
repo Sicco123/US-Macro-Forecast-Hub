@@ -57,6 +57,7 @@ nav:
   - About:
     - About the Hub: about/index.md
     - Methodology: evaluation/methodology.md
+    - Benchmarks: about/benchmarks.md
     - Team: about/team.md
 
 plugins:

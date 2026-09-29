@@ -6,8 +6,8 @@
   let plotlyPromise;
   const D = window.Dashboard = {
     color: (i) => (document.body.getAttribute("data-md-color-scheme") === "slate"
-      ? ["#9ab5ff", "#ffb380", "#80cbc4", "#df9bea", "#cbb5aa"]
-      : ["#4055a8", "#b34800", "#007f73", "#9a3caf", "#795548"])[i % 5],
+      ? ["#9ab5ff", "#ffb380", "#80cbc4", "#df9bea", "#cbb5aa", "#e0c36a", "#f39bb7", "#a8c7d5"]
+      : ["#4055a8", "#b34800", "#007f73", "#9a3caf", "#795548", "#875900", "#a52c56", "#4b636c"])[i % 8],
     dashes: ["solid", "dash", "dot", "dashdot", "longdash"],
     escape: (value) => String(value).replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -90,7 +90,7 @@
       const result = {};
       for (const [target, sd] of Object.entries(data)) {
         const models = Object.keys(sd.models);
-        const sums = Object.fromEntries(models.map((m) => [m, { score: 0, rank: 0, count: 0, log: 0, relativeCount: 0, zeros: 0 }]));
+        const sums = Object.fromEntries(models.map((m) => [m, { score: 0, rank: 0, count: 0, horizons: {} }]));
         const hKeys = [...new Set(models.flatMap((m) => Object.keys(sd.models[m])))].filter((h) => horizon === "all" || h === `h${horizon}`);
         sd.origin_dates.forEach((date, i) => {
           const year = +date.slice(0, 4), month = date.slice(0, 7);
@@ -106,16 +106,17 @@
               const storedRank = sd.models[m][h]?.[`${metric}_rank`]?.[i];
               sums[m].rank += (Number.isFinite(storedRank) ? storedRank : rank) * weight;
               sums[m].count += weight;
-              sums[m].log += sd.models[m][h]?.[`${metric}_log_sum`]?.[i] ?? 0;
-              sums[m].relativeCount += sd.models[m][h]?.[`${metric}_relative_count`]?.[i] ?? 0;
-              sums[m].zeros += sd.models[m][h]?.[`${metric}_zeros`]?.[i] ?? 0;
+              const pair = sums[m].horizons[h] ||= { score: 0, benchmark: 0 };
+              pair.score += sd.models[m][h]?.[`${metric}_paired_sum`]?.[i] ?? 0;
+              pair.benchmark += sd.models[m][h]?.[`${metric}_benchmark_sum`]?.[i] ?? 0;
             });
           }
         });
         for (const [m, s] of Object.entries(sums)) {
           result[m] ||= {};
+          const ratios = Object.values(s.horizons).filter((p) => p.benchmark > 0).map((p) => p.score / p.benchmark);
           result[m][target] = { count: s.count,
-            geomean: s.relativeCount ? (s.zeros ? 0 : Math.exp(s.log / s.relativeCount / (metric === "SqErr" ? 2 : 1))) : null,
+            geomean: ratios.length ? (ratios.includes(0) ? 0 : Math.exp(ratios.reduce((sum, r) => sum + Math.log(r), 0) / ratios.length / (metric === "SqErr" ? 2 : 1))) : null,
             rank: s.count ? s.rank / s.count : null,
             score: s.count ? (metric === "SqErr" ? Math.sqrt(s.score / s.count) : s.score / s.count) : null };
         }

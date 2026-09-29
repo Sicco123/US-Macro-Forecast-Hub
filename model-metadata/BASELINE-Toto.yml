@@ -1,0 +1,21 @@
+team_name: Baseline Models
+team_abbr: BASELINE
+model_name: Toto 1.0
+model_abbr: Toto
+model_version: '1.0'
+model_contributors:
+- name: Sicco Kooiker
+  affiliation: SBE EDS - Machine Learning in Macroeconomics
+  email: macro-forecast-hub@example.org
+team_model_designation: hub_baseline
+methods: Zero-shot Toto forecasts via FoundationForecast, using monthly log changes
+  for INDPRO/CPIAUCSL/PCEPI and first differences for UNRATE.
+methods_long: Checkpoint Datadog/Toto-Open-Base-1.0; FoundationForecast 0.1.10. No
+  fine-tuning. Last 512 transformed monthly observations before each origin; 24 horizons,
+  five required quantiles, seed 0. The wrapper point output is a median; no mean rows
+  are submitted. Quantiles are estimated from 128 predictive samples. Historical forecasts
+  use revised data and may overlap foundation-model pretraining; they are retrospective
+  benchmarks, not real-time out-of-sample claims.
+data_inputs: FRED-MD monthly dataset (target indicators only)
+license: CC-BY-4.0
+website_url: https://github.com/TimeCopilot/foundationforecast

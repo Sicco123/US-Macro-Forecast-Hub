@@ -167,12 +167,15 @@ def generate_scores():
 
     df = pd.read_csv(SCORES_FILE)
     df["model"] = df["team_id"] + "-" + df["model_id"]
-    # Keep exact log sums and counts so filtered geometric means preserve
-    # historical records sharing an origin/horizon, including zero losses.
-    relative = df["value_relative"].where(np.isfinite(df["value_relative"]) & (df["value_relative"] >= 0))
-    df["relative_log"] = np.log(relative.where(relative > 0))
-    df["relative_count"] = relative.notna().astype(int)
-    df["relative_zero"] = (relative == 0).astype(int)
+    # Pair losses before aggregation so numerator and denominator use the
+    # same records. Match the benchmark keys used by score_forecasts.py.
+    keys = ["target", "target_end_date", "horizon", "location", "metric"]
+    benchmark = df.loc[df["model"] == "MacroHub-RandomWalk", keys + ["value_absolute"]]
+    benchmark = benchmark.drop_duplicates(keys).rename(columns={"value_absolute": "benchmark"})
+    df = df.merge(benchmark, on=keys, how="left", validate="many_to_one")
+    paired = np.isfinite(df["benchmark"]) & (df["benchmark"] >= 0) & np.isfinite(df["value_absolute"])
+    df["paired_score"] = df["value_absolute"].where(paired)
+    df["benchmark"] = df["benchmark"].where(paired)
 
     # --- Per-target score time series ---
     for tgt in SCORED_TARGETS:
@@ -205,31 +208,27 @@ def generate_scores():
 
                 for metric in METRICS:
                     vals, ranks, counts = [None] * n_dates, [None] * n_dates, [0] * n_dates
-                    logs, relative_counts, zeros = [0.] * n_dates, [0] * n_dates, [0] * n_dates
+                    paired_sums, benchmark_sums = [0.] * n_dates, [0.] * n_dates
                     mrows = hdf[hdf["metric"] == metric]
                     # Some historical origins have multiple target dates at a stored
                     # horizon. Preserve their weight instead of silently overwriting.
                     cells = mrows.groupby("origin_date").agg(
                         score=("value_absolute", "mean"), rank=("rank", "mean"),
                         count=("value_absolute", "count"),
-                        log_sum=("relative_log", "sum"),
-                        relative_count=("relative_count", "sum"),
-                        zeros=("relative_zero", "sum"),
+                        paired_sum=("paired_score", "sum"), benchmark_sum=("benchmark", "sum"),
                     )
                     for od, cell in cells.iterrows():
                         idx = od_idx[od]
                         vals[idx] = float(cell["score"])
                         ranks[idx] = float(cell["rank"])
                         counts[idx] = int(cell["count"])
-                        logs[idx] = float(cell["log_sum"])
-                        relative_counts[idx] = int(cell["relative_count"])
-                        zeros[idx] = int(cell["zeros"])
+                        paired_sums[idx] = float(cell["paired_sum"])
+                        benchmark_sums[idx] = float(cell["benchmark_sum"])
                     metric_data[metric] = vals
                     metric_data[f"{metric}_rank"] = ranks
                     metric_data[f"{metric}_count"] = counts
-                    metric_data[f"{metric}_log_sum"] = logs
-                    metric_data[f"{metric}_relative_count"] = relative_counts
-                    metric_data[f"{metric}_zeros"] = zeros
+                    metric_data[f"{metric}_paired_sum"] = paired_sums
+                    metric_data[f"{metric}_benchmark_sum"] = benchmark_sums
 
                 model_scores[hkey] = metric_data
 

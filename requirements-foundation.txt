@@ -1,0 +1,4 @@
+# Optional benchmark environment; keep separate from the website/scoring env.
+# Pinned API: TimeCopilot/foundationforecast 0.1.10.
+foundationforecast==0.1.10
+pandas>=2.2,<3

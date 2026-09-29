@@ -59,3 +59,27 @@ The local skill searches returned relevant web guidance for keyboard controls an
 Implementation update: the code changes for all four phases are now applied. The existing stack is retained. Forecast median fallback, precision, complete URL state, latest-origin defaults, accessible controls, retry/empty states, request ordering, responsive CSS, paginated data tables, CSV export, conditional library loading, and data freshness are implemented. Rankings use stored scoring ranks and preserve the counts/weights of historical records sharing an origin and horizon. The indicator requirements, stored horizon convention, and latest-vintage scoring documentation are aligned with the implementation.
 
 Validation: `node tests/dashboard.cjs` passes using DOM/Plotly doubles; `mkdocs build --strict` passes. Exported counts and weighted means were checked against every model/target/metric in the source score CSV. Real-browser viewport, screen-reader, zoom, contrast, and cold/warm network checks remain pending because browser inspection stalled; these are not claimed as verified. No new framework, chart library, animation library, or test dependency was added.
+
+
+### Navigation and compact evaluation update
+
+Home is removed. Evaluation (score history) is the root landing page; Leaderboard
+has its own top-level menu item. Primary navigation stays on one row and remains
+visible, with contained horizontal scrolling at narrow widths. Score-history
+plots sit side by side above 900px. Indicator coverage and hub background now
+live under Indicators and About.
+
+The leaderboard defaults to geometric means of matched benchmark-relative
+losses, with Overall first and compact single-line cells. Origins are averaged
+within each horizon before geometric aggregation over horizons and indicators.
+This avoids a single exact-zero error collapsing the entire comparison.
+Quantile loss is scored from all five required quantiles and supports both ranks
+and geometric means. Crisis switches show Covid/GFC Included or Excluded without
+dates; dates and definitions remain in Methodology. Model display names omit
+MacroHub/BASELINE prefixes, while data identifiers remain intact.
+
+The strict build, dashboard regression checks, quantile-loss checks, and
+foundation-model adapter/metadata checks pass. Real-browser visual inspection
+remains unverified: the browser tool stalled. FoundationForecast inference could
+not run because dependency installation exhausted available disk space; its
+temporary downloads were removed. No foundation-model results are claimed.

@@ -83,14 +83,14 @@ function environment(page, query = '') {
   assert.equal(result.A.X.count,2); assert.equal(D.summarize(tiny,'SqErr',opts).A.X.score,Math.sqrt(50));
   assert.equal(D.summarize(tiny,'MAE',{...opts,yFrom:2021}).A.X.score,null);
   const geo = {X:{origin_dates:['2008-01-17','2020-04-17','2022-01-17'],models:{A:{h0:{
-    QuantileLoss:[2,8,4], QuantileLoss_log_sum:[Math.log(2),Math.log(8),Math.log(4)],
-    QuantileLoss_relative_count:[1,1,1], QuantileLoss_zeros:[0,0,0]
-  }}}}};
-  assert.ok(Math.abs(D.summarize(geo,'QuantileLoss',opts).A.X.geomean-4)<1e-12);
-  assert.equal(D.summarize(geo,'QuantileLoss',{...opts,includeCovid:false,includeGfc:false}).A.X.geomean,4);
-  geo.X.models.A.h0.QuantileLoss_zeros[0]=1;
+    QuantileLoss:[2,8,4], QuantileLoss_paired_sum:[2,8,4], QuantileLoss_benchmark_sum:[1,1,1]
+  },h1:{QuantileLoss:[1,1,1], QuantileLoss_paired_sum:[1,1,1], QuantileLoss_benchmark_sum:[2,2,2]}}}}};
+  assert.ok(Math.abs(D.summarize(geo,'QuantileLoss',opts).A.X.geomean-Math.sqrt(14/3*.5))<1e-12);
+  assert.ok(Math.abs(D.summarize(geo,'QuantileLoss',{...opts,includeCovid:false,includeGfc:false}).A.X.geomean-Math.sqrt(2))<1e-12);
+  geo.X.models.A.h0.QuantileLoss_paired_sum=[0,0,0];
   assert.equal(D.summarize(geo,'QuantileLoss',opts).A.X.geomean,0);
-  geo.X.models.A.h0.QuantileLoss_relative_count=[0,0,0];
+  geo.X.models.A.h0.QuantileLoss_benchmark_sum=[0,0,0];
+  geo.X.models.A.h1.QuantileLoss_benchmark_sum=[0,0,0];
   assert.equal(D.summarize(geo,'QuantileLoss',opts).A.X.geomean,null);
   const all = Object.fromEntries(['INDPRO','CPIAUCSL','PCEPI','UNRATE'].map(t=>[t,data(`scores_${t}.json`)]));
   result = D.summarize(all,'MAE',opts);

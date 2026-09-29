@@ -98,11 +98,16 @@ cell and tie rules as MAE. This uses the standard
 
 ## Geometric means
 
-The default leaderboard view is the **geometric mean of per-cell loss ratios**
-relative to RandomWalk. A value below 1 beats that benchmark. Ratios use the
-unrounded relative scores; cells with zero or missing benchmark loss are omitted.
-A zero model loss with a positive benchmark loss gives a zero geometric mean.
-RMSE takes the square root of the geometric mean squared-error ratio.
+The default leaderboard view is the **geometric mean of benchmark-relative
+losses across horizons**. For each target and horizon, losses are first averaged
+over the selected origins, pairing each model record with its RandomWalk
+benchmark. Their ratio is unit-free; a value below 1 beats the benchmark.
+RMSE uses the square root of the mean squared-error ratio.
+
+Missing benchmark records are omitted from both means. A horizon whose mean
+benchmark loss is zero is unavailable. A zero mean model loss with a positive
+benchmark gives a zero geometric mean. Averaging origins first prevents a single
+exact forecast from reducing an entire target's geometric mean to zero.
 
 Overall is the geometric mean of the four target-level geometric means, giving
 each indicator equal weight. It is unavailable if any target is missing.

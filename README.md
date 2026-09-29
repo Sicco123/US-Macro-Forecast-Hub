@@ -189,3 +189,28 @@ Run `node tests/dashboard.cjs` for the dashboard regression checks (Node.js,
 no packages required), then `mkdocs build --strict` to validate the site.
 The checks cover data aggregation and interaction logic using DOM/Plotly doubles;
 viewport, screen-reader, and browser rendering still require a browser check.
+
+## Foundation benchmarks
+
+Chronos-2, TimesFM 2.5, and Toto 1.0 use the optional
+[FoundationForecast runner](docs/about/benchmarks.md). Install
+`requirements-foundation.txt` in a separate Python 3.11 environment, then run:
+
+```bash
+python -m src.models.foundation --origin 2026-04-15
+# Or resume monthly historical forecasts for selected models:
+python -m src.models.foundation --models Chronos TimesFM Toto --start 2000-01-17 --end 2026-03-17
+```
+
+Outputs use the existing `BASELINE-{model}` submission format. Re-run scoring
+and `src/generate_dashboard_data.py` to include them in the website. Historical
+runs use revised truth and may overlap model pretraining. Chronos and Toto
+submit quantiles only because the wrapper's point forecasts are medians.
+
+Adapter checks without model downloads:
+
+```bash
+PYTHONPATH=. python tests/foundation.py
+PYTHONPATH=. python tests/scoring.py
+node tests/dashboard.cjs
+```
