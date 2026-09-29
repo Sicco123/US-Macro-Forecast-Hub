@@ -12,15 +12,15 @@ Comparison space (forecasts and truth evaluated in same transformed scale):
   UNRATE   → Δx        monthly first difference
 """
 
-import warnings
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy import stats
-from statsmodels.tsa.arima.model import ARIMA
+try:
+    from .arma_bic import generate_forecasts
+except ImportError:  # Direct script execution.
+    from arma_bic import generate_forecasts
 
-warnings.filterwarnings("ignore")
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
 TARGET_DATA_PATH = HUB_ROOT / "target-data" / "latest-target_values.csv"
@@ -54,36 +54,6 @@ def last_day_of_month(year: int, month: int) -> str:
         nxt = pd.Timestamp(year, month + 1, 1)
     return (nxt - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
-
-def select_arima_order(series: np.ndarray, d: int) -> tuple[int, int]:
-    """Select (p, q) by BIC with fixed integration order d."""
-    best_bic = np.inf
-    best_order = (1, 0)
-
-    for p in range(MAX_P + 1):
-        for q in range(MAX_Q + 1):
-            if p == 0 and q == 0:
-                continue
-            try:
-                model = ARIMA(series, order=(p, d, q))
-                result = model.fit(method_kwargs={"maxiter": 200})
-                if result.bic < best_bic:
-                    best_bic = result.bic
-                    best_order = (p, q)
-            except Exception:
-                continue
-
-    return best_order
-
-
-def forecast_arima(
-    series: np.ndarray, p: int, d: int, q: int, n_ahead: int
-) -> tuple[np.ndarray, np.ndarray]:
-    """Fit ARIMA(p,d,q) and return (point, std) for 1..n_ahead in working space."""
-    model = ARIMA(series, order=(p, d, q))
-    result = model.fit(method_kwargs={"maxiter": 200})
-    fc = result.get_forecast(steps=n_ahead)
-    return np.array(fc.predicted_mean), np.array(fc.se_mean)
 
 
 def rw_forecast_with_errors(
@@ -149,7 +119,7 @@ def make_rows(
             "location": "US",
             "output_type": "quantile",
             "output_type_id": q_level,
-            "value": round(float(q_val), 4),
+            "value": float(q_val),
         })
     rows.append({
         "origin_date": origin_date,
@@ -159,7 +129,7 @@ def make_rows(
         "location": "US",
         "output_type": "mean",
         "output_type_id": "",
-        "value": round(float(point), 4),
+        "value": float(point),
     })
     return rows
 
@@ -180,8 +150,7 @@ def run_backfill():
     ARMA_DIR.mkdir(parents=True, exist_ok=True)
 
     # Cache ARMA orders — re-select every 12 months
-    arma_orders: dict[str, tuple[int, int]] = {}
-    last_selection_year: dict[str, int] = {}
+    arma_orders = {}
 
     total = len(origin_dates)
     for idx, origin in enumerate(origin_dates):
@@ -223,46 +192,7 @@ def run_backfill():
                 q_vals = last_val + rw_err_q[horizon]
                 baseline_rows.extend(make_rows(origin_str, target, horizon, ted, last_val, q_vals))
 
-            # === ARMA(p,0,q) on pre-differenced series ===
-            # work is already in Δlog or Δ space — fit ARMA with d=0
-            raw = np.log(values) if use_log else values.copy()
-            arma_window = np.diff(raw)  # pre-differenced
-
-            cache_key = target
-            need_select = (
-                cache_key not in arma_orders
-                or origin.year != last_selection_year.get(cache_key)
-            )
-
-            if need_select:
-                p, q = select_arima_order(arma_window, 0)  # d=0 on pre-diff series
-                arma_orders[cache_key] = (p, q)
-                last_selection_year[cache_key] = origin.year
-
-            p, q = arma_orders[cache_key]
-
-            try:
-                n_ahead = max(HORIZONS) + 1
-                fc_point, fc_std = forecast_arima(arma_window, p, 0, q, n_ahead)
-            except Exception:
-                # Fallback: use baseline if ARIMA fails
-                for horizon in HORIZONS:
-                    target_month = last_date + pd.DateOffset(months=horizon + 1)
-                    ted = last_day_of_month(target_month.year, target_month.month)
-                    q_vals = last_val + rw_err_q[horizon]
-                    arma_rows.extend(make_rows(origin_str, target, horizon, ted, last_val, q_vals))
-                continue
-
-            for horizon in HORIZONS:
-                target_month = last_date + pd.DateOffset(months=horizon + 1)
-                ted = last_day_of_month(target_month.year, target_month.month)
-
-                mu = fc_point[horizon]
-                sigma = max(fc_std[horizon], 1e-10)
-
-                # Quantiles directly in Δlog / Δ space — no back-transform
-                q_vals = stats.norm.ppf(QUANTILES, loc=mu, scale=sigma)
-                arma_rows.extend(make_rows(origin_str, target, horizon, ted, float(mu), q_vals))
+        arma_rows = generate_forecasts(target_df, origin_str, orders=arma_orders)
 
         # Save files
         if baseline_rows:

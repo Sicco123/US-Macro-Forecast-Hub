@@ -12,14 +12,14 @@
     escape: (value) => String(value).replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
     })[c]),
-    format: (value) => Number.isFinite(value) ? value.toLocaleString(undefined, { maximumSignificantDigits: 6 }) : "—",
+    format: (value) => Number.isFinite(value) ? value.toLocaleString(undefined, { maximumSignificantDigits: 4 }) : "—",
     modelName: (value) => String(value).replace(/^(MacroHub|BASELINE)[- _]+/i, ""),
     point: (entry, i) => Number.isFinite(entry.mean?.[i])
       ? { value: entry.mean[i], statistic: "Mean" }
       : { value: entry.q050?.[i] ?? null, statistic: "Median" },
     json(name) {
       if (!cache.has(name)) {
-        cache.set(name, fetch(new URL(name, base), { signal: AbortSignal.timeout(20000) }).then((r) => {
+        cache.set(name, fetch(new URL(name, base), { cache: "no-cache", signal: AbortSignal.timeout(20000) }).then((r) => {
           if (!r.ok) throw new Error(`Data request failed (${r.status})`);
           return r.json();
         }).catch((e) => { cache.delete(name); throw e; }));
@@ -37,8 +37,13 @@
       });
       return plotlyPromise;
     },
+    validMonth: (value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(value),
+    nextMonth: (value) => {
+      const [year, month] = value.split("-").map(Number);
+      return `${month === 12 ? year + 1 : year}-${String(month === 12 ? 1 : month + 1).padStart(2, "0")}-01`;
+    },
     range(from, to) {
-      const valid = from.value !== "" && to.value !== "" && from.validity.valid && to.validity.valid && +from.value <= +to.value;
+      const valid = D.validMonth(from.value) && D.validMonth(to.value) && from.validity.valid && to.validity.valid && from.value <= to.value;
       from.setAttribute("aria-invalid", String(!valid));
       to.setAttribute("aria-invalid", String(!valid));
       return valid;
@@ -46,11 +51,12 @@
     restore(controls, params = new URLSearchParams(location.search)) {
       for (const [key, input] of Object.entries(controls)) {
         if (!params.has(key)) continue;
-        const v = params.get(key);
+        let v = params.get(key);
+        if (input.type === "month" && /^\d{4}$/.test(v)) v += /to$/i.test(key) ? "-12" : "-01";
         if (input.type === "checkbox") input.checked = v !== "false";
         else if (input.tagName === "SELECT") {
           if ([...input.options].some((o) => o.value === v)) input.value = v;
-        } else if (/^\d{4}$/.test(v) && +v >= +input.min && +v <= +input.max) input.value = v;
+        } else if (D.validMonth(v) && v >= input.min && v <= input.max) input.value = v;
       }
     },
     save(controls, extra = {}) {
@@ -86,15 +92,15 @@
       link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     },
     // Rank each origin/horizon cell before averaging. Equal values share the minimum rank.
-    summarize(data, metric, { horizon, yFrom, yTo, includeCovid, includeGfc = true }) {
+    summarize(data, metric, { horizon, fromMonth, toMonth, includeCovid, includeGfc = true }) {
       const result = {};
       for (const [target, sd] of Object.entries(data)) {
         const models = Object.keys(sd.models);
         const sums = Object.fromEntries(models.map((m) => [m, { score: 0, rank: 0, count: 0, horizons: {} }]));
         const hKeys = [...new Set(models.flatMap((m) => Object.keys(sd.models[m])))].filter((h) => horizon === "all" || h === `h${horizon}`);
         sd.origin_dates.forEach((date, i) => {
-          const year = +date.slice(0, 4), month = date.slice(0, 7);
-          if (year < yFrom || year > yTo || (!includeCovid && month >= "2020-03" && month <= "2021-06")) return;
+          const month = date.slice(0, 7);
+          if (month < fromMonth || month > toMonth || (!includeCovid && month >= "2020-03" && month <= "2021-06")) return;
           if (!includeGfc && month >= "2007-12" && month <= "2009-06") return;
           for (const h of hKeys) {
             const cell = models.map((m) => ({ m, v: sd.models[m][h]?.[metric]?.[i] })).filter((x) => Number.isFinite(x.v)).sort((a, b) => a.v - b.v);
@@ -106,9 +112,12 @@
               const storedRank = sd.models[m][h]?.[`${metric}_rank`]?.[i];
               sums[m].rank += (Number.isFinite(storedRank) ? storedRank : rank) * weight;
               sums[m].count += weight;
-              const pair = sums[m].horizons[h] ||= { score: 0, benchmark: 0 };
-              pair.score += sd.models[m][h]?.[`${metric}_paired_sum`]?.[i] ?? 0;
-              pair.benchmark += sd.models[m][h]?.[`${metric}_benchmark_sum`]?.[i] ?? 0;
+              const score = sd.models[m][h]?.[`${metric}_paired_sum`]?.[i];
+              const benchmark = sd.models[m][h]?.[`${metric}_benchmark_sum`]?.[i];
+              if (Number.isFinite(score) && score >= 0 && Number.isFinite(benchmark) && benchmark >= 0) {
+                const pair = sums[m].horizons[h] ||= { score: 0, benchmark: 0 };
+                pair.score += score; pair.benchmark += benchmark;
+              }
             });
           }
         });

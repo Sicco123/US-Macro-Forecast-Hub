@@ -4,32 +4,33 @@ hide:
   - navigation
 ---
 
-# Leaderboard
+# Evaluation
 
-<div id="eval-dashboard" data-view="summary" markdown="0">
+<div id="eval-dashboard" data-view="scores" markdown="0">
 <p id="eval-status" role="status" aria-live="polite">Loading…</p>
 <button id="eval-retry" class="dash-btn" hidden>Retry</button>
 
-<div id="eval-panel-summary">
+<div id="eval-panel-scores">
 
 <div class="dash-controls">
+  <label>Target
+    <select id="eval-target">
+      <option value="INDPRO">Industrial production (INDPRO)</option>
+      <option value="CPIAUCSL">Consumer prices (CPIAUCSL)</option>
+      <option value="PCEPI">PCE prices (PCEPI)</option>
+      <option value="UNRATE">Unemployment (UNRATE)</option>
+    </select>
+  </label>
   <label>Metric
-    <select id="eval-sum-metric">
+    <select id="eval-metric">
       <option value="MAE">MAE</option>
       <option value="SqErr">RMSE</option>
       <option value="QuantileLoss">Quantile loss</option>
     </select>
   </label>
-  <label>Show
-    <select id="eval-sum-view">
-      <option value="geomean" selected>Geometric mean</option>
-      <option value="rank">Average rank</option>
-      <option value="score">Average score</option>
-    </select>
-  </label>
   <label>Horizon
-    <select id="eval-sum-horizon">
-      <option value="all" selected>All horizons</option>
+    <select id="eval-horizon">
+      <option value="all">All</option>
       <option value="0">1 month</option>
       <option value="1">2 months</option>
       <option value="2">3 months</option>
@@ -57,25 +58,24 @@ hide:
     </select>
   </label>
   <label>From
-    <input type="month" id="eval-sum-month-from" value="2000-01" min="1900-01" max="2100-12">
+    <input type="month" id="eval-month-from" value="2000-01" min="1900-01" max="2100-12">
   </label>
   <label>To
-    <input type="month" id="eval-sum-month-to" value="2026-12" min="1900-01" max="2100-12">
+    <input type="month" id="eval-month-to" value="2026-12" min="1900-01" max="2100-12">
   </label>
-</div>
-<div class="dash-periods">
-  <label class="dash-toggle dash-period">
-    <input type="checkbox" id="eval-sum-covid" checked>
-    <span>Covid <span class="period-included">Included</span><span class="period-excluded">Excluded</span></span>
-  </label>
-  <label class="dash-toggle dash-period">
-    <input type="checkbox" id="eval-sum-gfc" checked>
-    <span>GFC <span class="period-included">Included</span><span class="period-excluded">Excluded</span></span>
-  </label>
+  <button id="eval-reset-zoom" class="dash-btn" title="Reset zoom to full range">&#x21ba; Reset Zoom</button>
 </div>
 
-<div id="eval-sum-table" class="dash-table-scroll" role="region" aria-label="Model leaderboard" tabindex="0"></div>
+<div class="dash-models" id="eval-models">Loading models...</div>
+
+<p id="eval-description" class="visually-hidden"></p>
+<div class="dash-chart-grid">
+<div class="dash-chart" id="eval-chart" role="region" aria-label="Rolling model errors" aria-describedby="eval-description"></div>
+<div class="dash-chart" id="eval-cumulative-chart" role="region" aria-label="Cumulative model errors"></div>
+</div>
+<details><summary>View monthly scores</summary><div id="eval-data-table" class="dash-table-scroll" role="region" aria-label="Monthly model scores" tabindex="0"></div></details>
 
 </div>
+
 
 </div>

@@ -19,7 +19,7 @@ function environment(page, query = '') {
       this.checked = /\bchecked\b/.test(attrs); this.hidden = /\bhidden\b/.test(attrs);
     }
     get selectedOptions() { return this.options.filter(o => o.value === String(this.value)); }
-    get validity() { return { valid: Number.isInteger(+this.value) && +this.value >= +this.min && +this.value <= +this.max }; }
+    get validity() { return { valid: this.type === 'month' ? /^\d{4}-(0[1-9]|1[0-2])$/.test(this.value) && this.value >= this.min && this.value <= this.max : Number.isInteger(+this.value) && +this.value >= +this.min && +this.value <= +this.max }; }
     setAttribute(k, v) { this.attrs[k] = String(v); }
     getAttribute(k) { return this.attrs[k]; }
     addEventListener(k, fn) { (this.events[k] ||= []).push(fn); }
@@ -34,7 +34,7 @@ function environment(page, query = '') {
     focus() { this.focused = true; }
     append(el) { this.children.push(el); }
   }
-  const md = read(page === 'fc' ? 'docs/forecasts/latest.md' : page === 'history' ? 'docs/index.md' : 'docs/evaluation/leaderboard.md');
+  const md = read(page === 'fc' ? 'docs/forecasts/latest.md' : page === 'history' ? 'docs/evaluation/history.md' : 'docs/index.md');
   for (const m of md.matchAll(/<(\w+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) elements[m[3]] = new Element(m[1], m[2]);
   for (const m of md.matchAll(/<select\b[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/select>/g)) {
     const el = elements[m[1]];
@@ -76,21 +76,28 @@ function environment(page, query = '') {
   assert.equal(D.point(ensemble,0).statistic,'Median'); assert.equal(D.point(ensemble,0).value,0.0021);
   assert.equal(D.point({mean:[0],q050:[4]},0).value,0);
   assert.notEqual(D.format(0.0022),'0.00');
+  assert.notEqual(D.format(0.0000002),'0');
+  assert.equal(D.nextMonth('2020-02'),'2020-03-01');
+  assert.equal(D.nextMonth('2020-12'),'2021-01-01');
   const tiny = {X:{origin_dates:['2020-01-17'],models:{A:{h0:{MAE:[0],SqErr:[0]},h1:{MAE:[100],SqErr:[100]}},B:{h0:{MAE:[1],SqErr:[1]},h1:{MAE:[2],SqErr:[4]}},C:{h0:{MAE:[1],SqErr:[1]},h1:{MAE:[2],SqErr:[4]}}}}};
-  const opts = {horizon:'all',yFrom:2000,yTo:2026,includeCovid:true};
+  const opts = {horizon:'all',fromMonth:'2000-01',toMonth:'2026-12',includeCovid:true};
   let result = D.summarize(tiny,'MAE',opts);
   assert.equal(result.A.X.rank,2); assert.equal(result.B.X.rank,1.5); assert.equal(result.C.X.rank,1.5);
   assert.equal(result.A.X.count,2); assert.equal(D.summarize(tiny,'SqErr',opts).A.X.score,Math.sqrt(50));
-  assert.equal(D.summarize(tiny,'MAE',{...opts,yFrom:2021}).A.X.score,null);
+  assert.equal(D.summarize(tiny,'MAE',{...opts,fromMonth:'2021-01'}).A.X.score,null);
   const geo = {X:{origin_dates:['2008-01-17','2020-04-17','2022-01-17'],models:{A:{h0:{
     QuantileLoss:[2,8,4], QuantileLoss_paired_sum:[2,8,4], QuantileLoss_benchmark_sum:[1,1,1]
   },h1:{QuantileLoss:[1,1,1], QuantileLoss_paired_sum:[1,1,1], QuantileLoss_benchmark_sum:[2,2,2]}}}}};
   assert.ok(Math.abs(D.summarize(geo,'QuantileLoss',opts).A.X.geomean-Math.sqrt(14/3*.5))<1e-12);
   assert.ok(Math.abs(D.summarize(geo,'QuantileLoss',{...opts,includeCovid:false,includeGfc:false}).A.X.geomean-Math.sqrt(2))<1e-12);
+  assert.equal(D.summarize(geo,'QuantileLoss',{...opts,fromMonth:'2022-02'}).A.X.geomean,null);
   geo.X.models.A.h0.QuantileLoss_paired_sum=[0,0,0];
   assert.equal(D.summarize(geo,'QuantileLoss',opts).A.X.geomean,0);
   geo.X.models.A.h0.QuantileLoss_benchmark_sum=[0,0,0];
   geo.X.models.A.h1.QuantileLoss_benchmark_sum=[0,0,0];
+  assert.equal(D.summarize(geo,'QuantileLoss',opts).A.X.geomean,null);
+  delete geo.X.models.A.h0.QuantileLoss_paired_sum;
+  geo.X.models.A.h0.QuantileLoss_benchmark_sum=[1,1,1];
   assert.equal(D.summarize(geo,'QuantileLoss',opts).A.X.geomean,null);
   const all = Object.fromEntries(['INDPRO','CPIAUCSL','PCEPI','UNRATE'].map(t=>[t,data(`scores_${t}.json`)]));
   result = D.summarize(all,'MAE',opts);
@@ -103,15 +110,23 @@ function environment(page, query = '') {
   assert.equal(fc.elements['fc-next'].disabled,true);
   assert.ok(fc.elements['fc-chart'].traces.some(t=>t.name==='ARMA_BIC'));
   assert.equal(fc.elements['fc-status'].textContent,'');
-  fc.elements['fc-year-from'].value=2026; fc.elements['fc-year-to'].value=2020; fc.ui.onRangeChange();
-  assert.match(fc.elements['fc-status'].textContent,/valid years/); assert.equal(fc.elements['fc-play'].disabled,true);
-  fc.elements['fc-year-from'].value=2027; fc.elements['fc-year-to'].value=2028; fc.ui.onRangeChange();
+  fc.elements['fc-month-from'].value='2026-01'; fc.elements['fc-month-to'].value='2020-12'; fc.ui.onRangeChange();
+  assert.match(fc.elements['fc-status'].textContent,/valid months/); assert.equal(fc.elements['fc-play'].disabled,true);
+  fc.elements['fc-month-from'].value='2027-01'; fc.elements['fc-month-to'].value='2028-12'; fc.ui.onRangeChange();
   assert.match(fc.elements['fc-status'].textContent,/No forecast origins/); fc.ui.stepSlider(1);
   const restored = environment('fc','?target=CPIAUCSL&from=2000&to=2001&origin=2000-01-17&models=MacroHub-Ensemble&horizon=2');
   await restored.ui.init();
   const trace=restored.elements['fc-chart'].traces.find(t=>t.name==='Ensemble');
   assert.equal(trace.y[0],0.0021); assert.equal(trace.customdata[0],'Median'); assert.equal(trace.y.length,2);
   assert.equal(restored.context.location.searchParams.get('origin'),'2000-01-17');
+  assert.equal(restored.elements['fc-month-from'].value,'2000-01');
+  assert.equal(restored.elements['fc-month-to'].value,'2001-12');
+  restored.elements['fc-month-from'].value='2000-02';
+  restored.elements['fc-month-to'].value='2000-02';
+  restored.ui.onRangeChange();
+  assert.equal(restored.elements['fc-slider-label'].textContent,'2000-02-17');
+  assert.equal(restored.elements['fc-chart'].layout.xaxis.range[0],'2000-02-01');
+  assert.equal(restored.elements['fc-chart'].layout.xaxis.range[1],'2000-03-01');
   const keyEvent={target:restored.elements['fc-reset-zoom'],key:' ',preventDefault(){throw Error('Button Space intercepted');}};
   restored.elements['fc-dashboard'].events.keydown[0](keyEvent);
   const original=restored.D.json; let resolveOld;
@@ -125,6 +140,7 @@ function environment(page, query = '') {
   const ev=environment('eval'); ev.ui.init(); await tick();
   assert.equal(ev.elements['eval-sum-view'].value,'geomean');
   assert.ok(!ev.elements['eval-chart']);
+  assert.match(ev.elements['eval-sum-table'].innerHTML, /data-sort="Model"[\s\S]*data-sort="Overall"/);
   assert.match(ev.elements['eval-sum-table'].innerHTML, /data-sort="Overall"/);
   assert.ok(!ev.elements['eval-sum-table'].innerHTML.includes('cells'));
   assert.ok(!ev.elements['eval-sum-table'].innerHTML.includes('MacroHub'));
@@ -138,8 +154,11 @@ function environment(page, query = '') {
   const history=environment('history'); history.ui.init(); await tick();
   assert.ok(!history.elements['eval-sum-table']);
   history.elements['eval-metric'].value='QuantileLoss';
+  history.elements['eval-month-from'].value='2020-03';
+  history.elements['eval-month-to'].value='2020-03';
   for(let i=0;i<3;i++) history.ui.drawChart();
   assert.ok(history.elements['eval-cumulative-chart'].traces.some(t => t.y.length));
+  assert.ok(history.elements['eval-cumulative-chart'].traces.every(t => t.x.every(d => d.startsWith('2020-03'))));
   assert.equal(history.elements['eval-chart'].events.plotly_relayout.length,1);
   history.D.json=async()=>{throw Error('offline')}; await history.ui.onTargetChange();
   assert.equal(history.elements['eval-chart'].traces.length,0); assert.equal(history.elements['eval-cumulative-chart'].traces.length,0);

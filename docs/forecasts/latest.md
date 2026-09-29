@@ -26,10 +26,10 @@ hide:
     </select>
   </label>
   <label>From
-    <input type="number" id="fc-year-from" value="2000" min="1900" max="2100">
+    <input type="month" id="fc-month-from" value="2000-01" min="1900-01" max="2100-12">
   </label>
   <label>To
-    <input type="number" id="fc-year-to" value="2026" min="1900" max="2100">
+    <input type="month" id="fc-month-to" value="2026-12" min="1900-01" max="2100-12">
   </label>
   <label>Max Horizon
     <select id="fc-max-horizon">

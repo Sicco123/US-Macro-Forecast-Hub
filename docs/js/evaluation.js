@@ -28,7 +28,7 @@
   let scoreRequest = 0, summaryRequest = 0;
   let savedModels = null;
   let summarySort = "Overall";
-  let minYear = 2000, maxYear = new Date().getFullYear();
+  let minMonth = "2000-01", maxMonth = "2100-12";
   let selectedModels = new Set();
   let modelColorMap = {};          // stable model → color mapping
 
@@ -38,8 +38,8 @@
   const selTarget = ROOT.querySelector("#eval-target");
   const selMetric = ROOT.querySelector("#eval-metric");
   const selHorizon = ROOT.querySelector("#eval-horizon");
-  const yearFrom = ROOT.querySelector("#eval-year-from");
-  const yearTo = ROOT.querySelector("#eval-year-to");
+  const monthFrom = ROOT.querySelector("#eval-month-from");
+  const monthTo = ROOT.querySelector("#eval-month-to");
   const modelBox = ROOT.querySelector("#eval-models");
   const chartDiv = ROOT.querySelector("#eval-chart");
   const btnResetZoom = ROOT.querySelector("#eval-reset-zoom");
@@ -48,17 +48,17 @@
   const selSumMetric = ROOT.querySelector("#eval-sum-metric");
   const selSumView = ROOT.querySelector("#eval-sum-view");
   const selSumHorizon = ROOT.querySelector("#eval-sum-horizon");
-  const sumYearFrom = ROOT.querySelector("#eval-sum-year-from");
-  const sumYearTo = ROOT.querySelector("#eval-sum-year-to");
+  const sumMonthFrom = ROOT.querySelector("#eval-sum-month-from");
+  const sumMonthTo = ROOT.querySelector("#eval-sum-month-to");
   const sumCovidCb = ROOT.querySelector("#eval-sum-covid");
   const sumGfcCb = ROOT.querySelector("#eval-sum-gfc");
   const sumTableDiv = ROOT.querySelector("#eval-sum-table");
 
   const status = ROOT.querySelector("#eval-status");
   const retry = ROOT.querySelector("#eval-retry");
-  const controls = Object.fromEntries(Object.entries({ target: selTarget, metric: selMetric, horizon: selHorizon, from: yearFrom, to: yearTo,
+  const controls = Object.fromEntries(Object.entries({ target: selTarget, metric: selMetric, horizon: selHorizon, from: monthFrom, to: monthTo,
     summaryMetric: selSumMetric, summaryView: selSumView, summaryHorizon: selSumHorizon,
-    summaryFrom: sumYearFrom, summaryTo: sumYearTo, covid: sumCovidCb, gfc: sumGfcCb }).filter(([, input]) => input));
+    summaryFrom: sumMonthFrom, summaryTo: sumMonthTo, covid: sumCovidCb, gfc: sumGfcCb }).filter(([, input]) => input));
   function saveState() { D.save(controls, { view: activeTab, sort: summarySort, ...(savedModels !== null ? { models: savedModels.join(",") } : currentTarget ? { models: [...selectedModels].join(",") } : {}) }); }
   function readState() {
     const params = new URLSearchParams(location.search);
@@ -79,10 +79,10 @@
   function init() {
     if (activeTab === "scores") {
       selTarget.addEventListener("change", onTargetChange);
-      [selMetric, selHorizon, yearFrom, yearTo].forEach((el) => el.addEventListener("change", drawChart));
-      btnResetZoom.addEventListener("click", () => { yearFrom.value = minYear; yearTo.value = maxYear; drawChart(); });
+      [selMetric, selHorizon, monthFrom, monthTo].forEach((el) => el.addEventListener("change", drawChart));
+      btnResetZoom.addEventListener("click", () => { monthFrom.value = minMonth; monthTo.value = maxMonth; drawChart(); });
     } else {
-      [selSumMetric, selSumView, selSumHorizon, sumYearFrom, sumYearTo, sumCovidCb, sumGfcCb].forEach((el) => el.addEventListener("change", drawSummary));
+      [selSumMetric, selSumView, selSumHorizon, sumMonthFrom, sumMonthTo, sumCovidCb, sumGfcCb].forEach((el) => el.addEventListener("change", drawSummary));
     }
     retry.addEventListener("click", () => activeTab === "scores" ? onTargetChange() : drawSummary());
     new MutationObserver(() => { Object.keys(modelColorMap).sort().forEach((m, i) => { modelColorMap[m] = D.color(i); }); if (activeTab === "scores") drawChart(); })
@@ -106,11 +106,11 @@
       if (id !== scoreRequest || activeTab !== "scores") return;
       currentTarget = target;
       if (data.origin_dates.length) {
-        minYear = +data.origin_dates[0].slice(0, 4); maxYear = +data.origin_dates.at(-1).slice(0, 4);
-        for (const input of [yearFrom, yearTo]) { input.min = minYear; input.max = maxYear; }
+        minMonth = data.origin_dates[0].slice(0, 7); maxMonth = data.origin_dates.at(-1).slice(0, 7);
+        for (const input of [monthFrom, monthTo]) { input.min = minMonth; input.max = maxMonth; }
         const params = new URLSearchParams(location.search);
-        if (!params.has("from")) yearFrom.value = minYear;
-        if (!params.has("to")) yearTo.value = maxYear;
+        if (!params.has("from")) monthFrom.value = minMonth;
+        if (!params.has("to")) monthTo.value = maxMonth;
       }
       buildModelCheckboxes(data); drawChart();
     } catch {
@@ -144,26 +144,26 @@
   }
 
   // Sync From/To inputs on Plotly zoom
-  function syncYearsFromPlotly(eventData) {
+  function syncMonthsFromPlotly(eventData) {
     if (eventData["xaxis.range[0]"] && eventData["xaxis.range[1]"]) {
-      const newFrom = parseInt(eventData["xaxis.range[0]"].slice(0, 4));
-      const newTo = parseInt(eventData["xaxis.range[1]"].slice(0, 4));
-      if (!isNaN(newFrom) && !isNaN(newTo)) {
-        yearFrom.value = Math.max(minYear, newFrom);
-        yearTo.value = Math.min(maxYear, newTo);
+      const newFrom = eventData["xaxis.range[0]"].slice(0, 7);
+      const newTo = eventData["xaxis.range[1]"].slice(0, 7);
+      if (D.validMonth(newFrom) && D.validMonth(newTo)) {
+        monthFrom.value = newFrom < minMonth ? minMonth : newFrom;
+        monthTo.value = newTo > maxMonth ? maxMonth : newTo;
         drawChart();
       }
     }
     if (eventData["xaxis.autorange"]) {
-      yearFrom.value = minYear;
-      yearTo.value = maxYear;
+      monthFrom.value = minMonth;
+      monthTo.value = maxMonth;
       drawChart();
     }
   }
 
   function drawChart() {
     if (activeTab !== "scores" || !window.Plotly) return;
-    if (!D.range(yearFrom, yearTo)) { clearCharts(); status.textContent = "Enter valid years with From no later than To."; return; }
+    if (!D.range(monthFrom, monthTo)) { clearCharts(); status.textContent = "Enter valid months with From no later than To."; return; }
     const data = scoresCache[currentTarget];
     if (!data) { clearCharts(); return; }
     saveState();
@@ -174,8 +174,8 @@
     const displayName = isRMSE ? "RMSE" : metricKey === "QuantileLoss" ? "Quantile loss" : metricKey;
 
     const horizon = selHorizon.value;  // "all" or "0","1",...
-    const yFrom = parseInt(yearFrom.value) || minYear;
-    const yTo = parseInt(yearTo.value) || maxYear;
+    const fromMonth = monthFrom.value;
+    const toMonth = monthTo.value;
 
     // Horizon display: data key "0" = display "1 month", etc.
     const hLabel = horizon === "all" ? "all horizons"
@@ -204,8 +204,8 @@
 
       const filtDates = [], filtVals = [];
       data.origin_dates.forEach((d, i) => {
-        const y = parseInt(d.slice(0, 4));
-        if (y >= yFrom && y <= yTo && avgVals[i] != null) {
+        const month = d.slice(0, 7);
+        if (month >= fromMonth && month <= toMonth && avgVals[i] != null) {
           filtDates.push(d); filtVals.push(avgVals[i]);
         }
       });
@@ -236,7 +236,7 @@
     });
 
     status.textContent = rows.length ? "" : "No scores for this selection. Select a model or widen the period.";
-    ROOT.querySelector("#eval-description").textContent = `${selTarget.selectedOptions[0].textContent}; ${displayName}, ${hLabel}, origins ${yFrom}–${yTo}. Bold lines show rolling averages over up to 12 available origins. The table gives monthly values. Cumulative totals depend on coverage.`;
+    ROOT.querySelector("#eval-description").textContent = `${selTarget.selectedOptions[0].textContent}; ${displayName}, ${hLabel}, origins ${fromMonth}–${toMonth}. Bold lines show rolling averages over up to 12 available origins. The table gives monthly values. Cumulative totals depend on coverage.`;
     D.table(ROOT.querySelector("#eval-data-table"), ["Model", "Origin", displayName], rows.map((r) => [r[0], r[1], D.format(r[2])]), `${currentTarget} — ${displayName} (${hLabel})`);
     const dark = isDark();
     const layout = {
@@ -244,7 +244,7 @@
       title: { text: `Rolling ${displayName}`,
                font: { size: 16, color: dark ? "#ddd" : "#333" }, x: 0.01 },
       xaxis: {
-        range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
+        range: [`${fromMonth}-01`, D.nextMonth(toMonth)],
         ...plotlyGrid(), tickformat: "%Y",
         spikecolor: dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)", spikethickness: 1,
       },
@@ -259,7 +259,7 @@
 
     Plotly.react(chartDiv, traces, layout, PLOTLY_CONFIG);
     chartDiv.removeAllListeners && chartDiv.removeAllListeners("plotly_relayout");
-    chartDiv.on("plotly_relayout", syncYearsFromPlotly);
+    chartDiv.on("plotly_relayout", syncMonthsFromPlotly);
 
     drawCumulativeChart();
   }
@@ -276,8 +276,8 @@
     const horizon = selHorizon.value;
     const hLabel = horizon === "all" ? "all horizons"
       : `horizon ${parseInt(horizon) + 1}`;
-    const yFrom = parseInt(yearFrom.value) || minYear;
-    const yTo = parseInt(yearTo.value) || maxYear;
+    const fromMonth = monthFrom.value;
+    const toMonth = monthTo.value;
 
     const models = Object.keys(data.models).sort().filter((m) => selectedModels.has(m));
     const traces = [];
@@ -303,8 +303,8 @@
       const filtDates = [], cumVals = [];
       let cumSum = 0;
       data.origin_dates.forEach((d, i) => {
-        const y = parseInt(d.slice(0, 4));
-        if (y >= yFrom && y <= yTo && avgVals[i] != null) {
+        const month = d.slice(0, 7);
+        if (month >= fromMonth && month <= toMonth && avgVals[i] != null) {
           cumSum += avgVals[i];
           filtDates.push(d);
           cumVals.push(cumSum);
@@ -324,7 +324,7 @@
       font: plotlyFont(),
       title: { text: `Cumulative ${displayName.toLowerCase()}`, font: { size: 14, color: dark ? "#ccc" : "#555" }, x: 0.01 },
       xaxis: {
-        range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
+        range: [`${fromMonth}-01`, D.nextMonth(toMonth)],
         ...plotlyGrid(), tickformat: "%Y",
         spikecolor: dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)", spikethickness: 1,
       },
@@ -339,15 +339,15 @@
 
     Plotly.react(cumChartDiv, traces, layout, PLOTLY_CONFIG);
     cumChartDiv.removeAllListeners && cumChartDiv.removeAllListeners("plotly_relayout");
-    cumChartDiv.on("plotly_relayout", syncYearsFromPlotly);
+    cumChartDiv.on("plotly_relayout", syncMonthsFromPlotly);
   }
 
   const SUMMARY_TARGETS = ["INDPRO", "CPIAUCSL", "PCEPI", "UNRATE"];
   async function drawSummary() {
     const id = ++summaryRequest;
     if (activeTab !== "summary") return;
-    if (!D.range(sumYearFrom, sumYearTo)) {
-      status.textContent = "Enter valid years with From no later than To."; panelSummary.setAttribute("aria-busy", "false"); sumTableDiv.replaceChildren(); return;
+    if (!D.range(sumMonthFrom, sumMonthTo)) {
+      status.textContent = "Enter valid months with From no later than To."; panelSummary.setAttribute("aria-busy", "false"); sumTableDiv.replaceChildren(); return;
     }
     status.textContent = "Loading rankings…"; retry.hidden = true;
     panelSummary.setAttribute("aria-busy", "true"); sumTableDiv.replaceChildren();
@@ -356,10 +356,10 @@
       if (id !== summaryRequest || activeTab !== "summary") return;
       const dates = SUMMARY_TARGETS.flatMap((t) => scoresCache[t].origin_dates).sort();
       const params = new URLSearchParams(location.search);
-      if (!params.has("summaryFrom") && dates.length) sumYearFrom.value = dates[0].slice(0, 4);
-      if (!params.has("summaryTo") && dates.length) sumYearTo.value = dates.at(-1).slice(0, 4);
+      if (!params.has("summaryFrom") && dates.length) sumMonthFrom.value = dates[0].slice(0, 7);
+      if (!params.has("summaryTo") && dates.length) sumMonthTo.value = dates.at(-1).slice(0, 7);
       const metric = selSumMetric.value, view = selSumView.value;
-      const result = D.summarize(scoresCache, metric, { horizon: selSumHorizon.value, yFrom: +sumYearFrom.value, yTo: +sumYearTo.value, includeCovid: sumCovidCb.checked, includeGfc: sumGfcCb.checked });
+      const result = D.summarize(scoresCache, metric, { horizon: selSumHorizon.value, fromMonth: sumMonthFrom.value, toMonth: sumMonthTo.value, includeCovid: sumCovidCb.checked, includeGfc: sumGfcCb.checked });
       const targets = view !== "score" ? ["Overall", ...SUMMARY_TARGETS] : SUMMARY_TARGETS;
       if (summarySort !== "Model" && !targets.includes(summarySort)) summarySort = targets[0];
       const value = (model, target) => {
@@ -374,7 +374,7 @@
       const count = models.reduce((total, m) => total + SUMMARY_TARGETS.reduce((n, t) => n + (result[m][t]?.count || 0), 0), 0);
       if (!count) { status.textContent = "No scores for this selection. Widen the period or include crisis origins."; saveState(); return; }
       const displayName = metric === "SqErr" ? "RMSE" : metric === "QuantileLoss" ? "Quantile loss" : "MAE";
-      const columns = targets.includes("Overall") ? ["Overall", "Model", ...SUMMARY_TARGETS] : ["Model", ...targets];
+      const columns = targets.includes("Overall") ? ["Model", "Overall", ...SUMMARY_TARGETS] : ["Model", ...targets];
       let html = `<table class="eval-summary-table"><caption class="visually-hidden">${displayName} — ${view === "geomean" ? "geometric mean relative to RandomWalk" : view}; lower is better.</caption><thead><tr>`;
       for (const t of columns) html += `<th scope="col" aria-sort="${summarySort === t ? "ascending" : "none"}"><button class="dash-sort" data-sort="${t}">${t}${summarySort === t ? " ↑" : ""}</button></th>`;
       html += "</tr></thead><tbody>";
@@ -384,7 +384,7 @@
         for (const t of columns) {
           if (t === "Model") { html += `<th scope="row">${D.escape(D.modelName(m))}</th>`; continue; }
           const v = value(m, t), winner = v !== null && v === best[t];
-          html += `<td${winner ? ' class="best"' : ""}>${v === null ? "—" : view === "score" ? D.format(v) : v.toFixed(2)}${winner ? '<span class="visually-hidden"> (best)</span>' : ""}</td>`;
+          html += `<td${winner ? ' class="best"' : ""}>${v === null ? "—" : view === "rank" ? v.toFixed(2) : D.format(v)}${winner ? '<span class="visually-hidden"> (best)</span>' : ""}</td>`;
         }
         html += "</tr>";
       }

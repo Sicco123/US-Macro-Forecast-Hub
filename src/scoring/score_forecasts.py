@@ -117,7 +117,7 @@ def score_all() -> pd.DataFrame:
 
     # ── Build base DataFrame from pivot ────────────────────────────────────
     base = q_pivot[BASE_COLS].copy()
-    base["MAE"] = np.round(mae, 6)
+    base["MAE"] = mae
     base["QuantileLoss"] = quantile_loss(
         obs, q_pivot.reindex(columns=Q_LEVELS).to_numpy(dtype=float)
     )
@@ -127,7 +127,7 @@ def score_all() -> pd.DataFrame:
         BASE_COLS + ["value", "observed"]
     ].copy()
     mean_fc["value"] = mean_fc["value"].astype(float)
-    mean_fc["SqErr"] = np.round((mean_fc["value"] - mean_fc["observed"]) ** 2, 8)
+    mean_fc["SqErr"] = (mean_fc["value"] - mean_fc["observed"]) ** 2
 
     base = base.merge(mean_fc[BASE_COLS + ["SqErr"]], on=BASE_COLS, how="left")
 

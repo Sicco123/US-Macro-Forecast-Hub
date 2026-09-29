@@ -30,7 +30,7 @@
   let currentTarget = null;
   let originDates = [];
   let sliderIndex = -1;
-  let minYear = 2000, maxYear = new Date().getFullYear() + 2;
+  let minMonth = "2000-01", maxMonth = "2100-12";
   let requestId = 0;
   let modelSelection = null;
   let restoredOrigin = null;
@@ -44,8 +44,8 @@
   const selMetric = ROOT.querySelector("#fc-metric");
   const selMaxHorizon = ROOT.querySelector("#fc-max-horizon");
   const modelBox = ROOT.querySelector("#fc-models");
-  const yearFrom = ROOT.querySelector("#fc-year-from");
-  const yearTo = ROOT.querySelector("#fc-year-to");
+  const monthFrom = ROOT.querySelector("#fc-month-from");
+  const monthTo = ROOT.querySelector("#fc-month-to");
   const slider = ROOT.querySelector("#fc-slider");
   const sliderLabel = ROOT.querySelector("#fc-slider-label");
   const btnPrev = ROOT.querySelector("#fc-prev");
@@ -58,7 +58,7 @@
 
   const status = ROOT.querySelector("#fc-status");
   const retry = ROOT.querySelector("#fc-retry");
-  const controls = { target: selTarget, metric: selMetric, horizon: selMaxHorizon, from: yearFrom, to: yearTo };
+  const controls = { target: selTarget, metric: selMetric, horizon: selMaxHorizon, from: monthFrom, to: monthTo };
   const tableDiv = ROOT.querySelector("#fc-table");
   const download = ROOT.querySelector("#fc-download");
   const accuracy = ROOT.querySelector("#fc-accuracy");
@@ -67,9 +67,9 @@
     tableDiv.replaceChildren(); tableRows = []; download.disabled = true;
   }
   function validRange() {
-    if (D.range(yearFrom, yearTo)) return true;
+    if (D.range(monthFrom, monthTo)) return true;
     stopPlay(); clearCharts();
-    status.textContent = "Enter valid years with From no later than To.";
+    status.textContent = "Enter valid months with From no later than To.";
     [slider, btnPrev, btnNext, btnPlay].forEach((el) => { el.disabled = true; });
     return false;
   }
@@ -93,8 +93,8 @@
   }
 
   function computeYRange() {
-    const yFrom = parseInt(yearFrom.value) || minYear;
-    const yTo = parseInt(yearTo.value) || maxYear;
+    const fromMonth = monthFrom.value;
+    const toMonth = monthTo.value;
 
     // Observed values: collected separately and NEVER clipped — the observed
     // line must always be fully visible, even when the selected model's
@@ -104,8 +104,8 @@
     if (t) {
       const displayVals = truthDisplayValues(t);
       t.dates.forEach((d, i) => {
-        const y = parseInt(d.slice(0, 4));
-        if (y >= yFrom && y <= yTo + 1 && displayVals[i] != null) {
+        const month = d.slice(0, 7);
+        if (month >= fromMonth && month <= toMonth && displayVals[i] != null) {
           truthVals.push(displayVals[i]);
         }
       });
@@ -204,8 +204,8 @@
       maxHorizon = parseInt(selMaxHorizon.value);
       draw(); drawScoreChart(); drawCumulativeChart();
     });
-    yearFrom.addEventListener("change", onRangeChange);
-    yearTo.addEventListener("change", onRangeChange);
+    monthFrom.addEventListener("change", onRangeChange);
+    monthTo.addEventListener("change", onRangeChange);
     slider.addEventListener("input", onSliderMove);
     btnPrev.addEventListener("click", () => { stopPlay(); stepSlider(-1); });
     btnNext.addEventListener("click", () => { stopPlay(); stepSlider(1); });
@@ -252,13 +252,13 @@
         status.textContent = "No forecasts are available for this indicator yet.";
         return;
       }
-      minYear = +forecasts.origin_dates[0].slice(0, 4);
+      minMonth = forecasts.origin_dates[0].slice(0, 7);
       const latestYear = +forecasts.origin_dates.at(-1).slice(0, 4);
-      maxYear = latestYear + 2;
-      for (const input of [yearFrom, yearTo]) { input.min = minYear; input.max = maxYear; }
+      maxMonth = `${latestYear + 2}-12`;
+      for (const input of [monthFrom, monthTo]) { input.min = minMonth; input.max = maxMonth; }
       const params = new URLSearchParams(location.search);
-      if (!params.has("from")) yearFrom.value = Math.max(minYear, latestYear - 5);
-      if (!params.has("to")) yearTo.value = maxYear;
+      if (!params.has("from")) monthFrom.value = `${Math.max(+minMonth.slice(0, 4), latestYear - 5)}-01`;
+      if (!params.has("to")) monthTo.value = maxMonth;
       buildModelCheckboxes();
       updateSlider();
       const desired = restoredOrigin || previousOrigin;
@@ -304,11 +304,11 @@
 
   function updateSlider() {
     if (!fcData) return;
-    const yFrom = parseInt(yearFrom.value) || minYear;
-    const yTo = parseInt(yearTo.value) || maxYear;
+    const fromMonth = monthFrom.value;
+    const toMonth = monthTo.value;
     originDates = fcData.origin_dates.filter((d) => {
-      const y = parseInt(d.slice(0, 4));
-      return y >= yFrom && y <= yTo;
+      const month = d.slice(0, 7);
+      return month >= fromMonth && month <= toMonth;
     });
     slider.max = Math.max(0, originDates.length - 1);
     sliderIndex = Math.min(sliderIndex, originDates.length - 1);
@@ -318,9 +318,9 @@
   }
 
   function resetZoom() {
-    // Reset year inputs to full range and redraw all charts from scratch
-    yearFrom.value = minYear;
-    yearTo.value = maxYear;
+    // Reset month inputs to full range and redraw all charts from scratch
+    monthFrom.value = minMonth;
+    monthTo.value = maxMonth;
     onRangeChange();
   }
 
@@ -348,27 +348,27 @@
     const date = originDates[sliderIndex];
     sliderLabel.textContent = date || "No origins";
     slider.setAttribute("aria-valuetext", date || "No forecast origins in this range");
-    const unavailable = !date || ROOT.getAttribute("aria-busy") === "true" || !D.range(yearFrom, yearTo);
+    const unavailable = !date || ROOT.getAttribute("aria-busy") === "true" || !D.range(monthFrom, monthTo);
     slider.disabled = btnPlay.disabled = unavailable;
     btnPrev.disabled = unavailable || sliderIndex <= 0;
     btnNext.disabled = unavailable || sliderIndex >= originDates.length - 1;
   }
 
-  function syncYearsFromPlotly(eventData) {
+  function syncMonthsFromPlotly(eventData) {
     if (eventData["xaxis.range[0]"] && eventData["xaxis.range[1]"]) {
-      const newFrom = parseInt(eventData["xaxis.range[0]"].slice(0, 4));
-      const newTo = parseInt(eventData["xaxis.range[1]"].slice(0, 4));
-      if (!isNaN(newFrom) && !isNaN(newTo)) {
-        yearFrom.value = Math.max(minYear, newFrom);
-        yearTo.value = Math.min(maxYear, newTo);
+      const newFrom = eventData["xaxis.range[0]"].slice(0, 7);
+      const newTo = eventData["xaxis.range[1]"].slice(0, 7);
+      if (D.validMonth(newFrom) && D.validMonth(newTo)) {
+        monthFrom.value = newFrom < minMonth ? minMonth : newFrom;
+        monthTo.value = newTo > maxMonth ? maxMonth : newTo;
         updateSlider();
         yAxisRange = computeYRange();
         draw(); drawScoreChart(); drawCumulativeChart();
       }
     }
     if (eventData["xaxis.autorange"]) {
-      yearFrom.value = minYear;
-      yearTo.value = maxYear;
+      monthFrom.value = minMonth;
+      monthTo.value = maxMonth;
       updateSlider();
       yAxisRange = computeYRange();
       draw(); drawScoreChart(); drawCumulativeChart();
@@ -387,20 +387,20 @@
 
     const originDate = originDates[sliderIndex];
     ROOT.querySelector("#fc-description").textContent = `${selTarget.selectedOptions[0].textContent}. Origin ${originDate}; up to ${maxHorizon} monthly steps. Units: ${yAxisLabel(currentTarget)}. Exact values and intervals are in the table below.`;
-    const yFrom = parseInt(yearFrom.value) || minYear;
-    const yTo = parseInt(yearTo.value) || maxYear;
+    const fromMonth = monthFrom.value;
+    const toMonth = monthTo.value;
     const traces = [];
 
     const t = truthData[currentTarget];
     if (t) {
-      const endLimit = new Date(yTo + 1, 0, 1);
-      const startLimit = new Date(yFrom, 0, 1);
+      const endLimit = new Date(D.nextMonth(toMonth));
+      const startLimit = new Date(`${fromMonth}-01`);
       const xArr = [], yArr = [];
       const displayVals = truthDisplayValues(t);
       const decimals = (t.transform === "log_diff" || t.transform === "diff") ? 4 : 2;
       t.dates.forEach((d, i) => {
         const dt = new Date(d);
-        if (dt >= startLimit && dt <= endLimit && displayVals[i] != null) {
+        if (dt >= startLimit && dt < endLimit && displayVals[i] != null) {
           xArr.push(d); yArr.push(displayVals[i]);
         }
       });
@@ -470,7 +470,7 @@
       font: plotlyFont(),
       title: { text: currentTarget, font: { size: 16, color: titleColor }, x: 0.01 },
       xaxis: {
-        range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
+        range: [`${fromMonth}-01`, D.nextMonth(toMonth)],
         ...plotlyGrid(), tickformat: "%Y",
         spikecolor: spikeColor, spikethickness: 1,
       },
@@ -490,7 +490,7 @@
     Plotly.react(chartDiv, traces, layout, PLOTLY_CONFIG);
     chartDiv.removeAllListeners && chartDiv.removeAllListeners("plotly_relayout");
     chartDiv.removeAllListeners && chartDiv.removeAllListeners("plotly_click");
-    chartDiv.on("plotly_relayout", syncYearsFromPlotly);
+    chartDiv.on("plotly_relayout", syncMonthsFromPlotly);
 
     // Click on chart to jump forecast origin to the closest date
     chartDiv.on("plotly_click", function (data) {
@@ -516,8 +516,8 @@
     const displayName = isRMSE ? "RMSE" : metricKey;
 
     const models = Object.keys(scoresData.models).sort().filter((m) => selectedModels.has(m));
-    const yFrom = parseInt(yearFrom.value) || minYear;
-    const yTo = parseInt(yearTo.value) || maxYear;
+    const fromMonth = monthFrom.value;
+    const toMonth = monthTo.value;
     const traces = [];
 
     // Use only the selected max horizon (data keys are h0, h1, ... where h0 = horizon 1)
@@ -530,9 +530,9 @@
 
       const filtDates = [], filtVals = [];
       scoresData.origin_dates.forEach((d, i) => {
-        const y = parseInt(d.slice(0, 4));
+        const month = d.slice(0, 7);
         const v = hData?.[i];
-        if (y >= yFrom && y <= yTo && v != null) {
+        if (month >= fromMonth && month <= toMonth && v != null) {
           filtDates.push(d); filtVals.push(v);
         }
       });
@@ -558,7 +558,7 @@
       font: plotlyFont(),
       title: { text: `${displayName} — horizon ${maxHorizon} (12-month rolling avg)`, font: { size: 14, color: dark2 ? "#ccc" : "#555" }, x: 0.01 },
       xaxis: {
-        range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
+        range: [`${fromMonth}-01`, D.nextMonth(toMonth)],
         ...plotlyGrid(), tickformat: "%Y",
         spikecolor: dark2 ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)", spikethickness: 1,
       },
@@ -573,7 +573,7 @@
 
     Plotly.react(scoreChartDiv, traces, layout, PLOTLY_CONFIG);
     scoreChartDiv.removeAllListeners && scoreChartDiv.removeAllListeners("plotly_relayout");
-    scoreChartDiv.on("plotly_relayout", syncYearsFromPlotly);
+    scoreChartDiv.on("plotly_relayout", syncMonthsFromPlotly);
   }
 
   // --- cumulative error chart (only for MAE and RMSE) — single horizon only ---
@@ -593,8 +593,8 @@
     const displayName = isRMSE ? "Cumulative Squared Error" : "Cumulative Absolute Error";
 
     const models = Object.keys(scoresData.models).sort().filter((m) => selectedModels.has(m));
-    const yFrom = parseInt(yearFrom.value) || minYear;
-    const yTo = parseInt(yearTo.value) || maxYear;
+    const fromMonth = monthFrom.value;
+    const toMonth = monthTo.value;
     const traces = [];
 
     // Use only the selected max horizon
@@ -609,9 +609,9 @@
       const filtDates = [], cumVals = [];
       let cumSum = 0;
       scoresData.origin_dates.forEach((d, i) => {
-        const y = parseInt(d.slice(0, 4));
+        const month = d.slice(0, 7);
         const v = hData?.[i];
-        if (y >= yFrom && y <= yTo && v != null) {
+        if (month >= fromMonth && month <= toMonth && v != null) {
           cumSum += v;
           filtDates.push(d);
           cumVals.push(cumSum);
@@ -631,7 +631,7 @@
       font: plotlyFont(),
       title: { text: `Total ${isRMSE ? "squared" : "absolute"} error — step ${maxHorizon}`, font: { size: 14, color: dark3 ? "#ccc" : "#555" }, x: 0.01 },
       xaxis: {
-        range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
+        range: [`${fromMonth}-01`, D.nextMonth(toMonth)],
         ...plotlyGrid(), tickformat: "%Y",
         spikecolor: dark3 ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)", spikethickness: 1,
       },
@@ -646,7 +646,7 @@
 
     Plotly.react(cumChartDiv, traces, layout, PLOTLY_CONFIG);
     cumChartDiv.removeAllListeners && cumChartDiv.removeAllListeners("plotly_relayout");
-    cumChartDiv.on("plotly_relayout", syncYearsFromPlotly);
+    cumChartDiv.on("plotly_relayout", syncMonthsFromPlotly);
   }
 
   function renderTable() {

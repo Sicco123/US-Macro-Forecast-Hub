@@ -42,11 +42,11 @@ theme:
     - content.code.copy
 
 nav:
-  - Evaluation: index.md
-  - Leaderboard: evaluation/leaderboard.md
+  - Leaderboard: index.md
   - Forecasts:
     - Latest Forecasts: forecasts/latest.md
     - Forecast Archive: forecasts/archive.md
+  - Evaluation: evaluation/history.md
   - Participate:
     - How to Submit: participate/how-to-submit.md
     - Submission Format: participate/format.md

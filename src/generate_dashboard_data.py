@@ -37,15 +37,9 @@ Q_MAP = dict(zip(QUANTILE_LEVELS, QUANTILE_KEYS))
 METRICS = ["MAE", "SqErr", "QuantileLoss"]
 
 
-def _nan_round(arr, decimals=4):
-    """Round array, converting NaN to None for JSON."""
-    out = []
-    for v in arr:
-        if v is None or (isinstance(v, float) and np.isnan(v)):
-            out.append(None)
-        else:
-            out.append(round(float(v), decimals))
-    return out
+def _json_values(arr):
+    """Keep numeric precision; JSON represents missing/non-finite values as null."""
+    return [float(v) if v is not None and np.isfinite(v) else None for v in arr]
 
 
 def generate_truth():
@@ -56,17 +50,17 @@ def generate_truth():
         values = sub["value"].values.astype(float)
         entry = {
             "dates": sub["truth_date"].tolist(),
-            "values": _nan_round(values),
+            "values": _json_values(values),
         }
         # Compute transformed values for scored targets so the frontend
         # can plot the truth in the same space as the forecast values.
         if tgt in LOG_DIFF_TARGETS:
             transformed = np.concatenate([[np.nan], np.diff(np.log(values))])
-            entry["transformed_values"] = _nan_round(transformed)
+            entry["transformed_values"] = _json_values(transformed)
             entry["transform"] = "log_diff"
         elif tgt in DIFF_TARGETS:
             transformed = np.concatenate([[np.nan], np.diff(values)])
-            entry["transformed_values"] = _nan_round(transformed)
+            entry["transformed_values"] = _json_values(transformed)
             entry["transform"] = "diff"
         else:
             entry["transform"] = "level"
@@ -141,13 +135,13 @@ def generate_forecasts():
 
                 for ql, qk in Q_MAP.items():
                     if ql in od_df.columns:
-                        entry[qk] = _nan_round(od_df[ql].values, 4)
+                        entry[qk] = _json_values(od_df[ql].values)
                     else:
                         entry[qk] = [None] * len(teds)
 
-                entry["mean"] = _nan_round(
+                entry["mean"] = _json_values(
                     od_df["mean_val"].values if "mean_val" in od_df.columns
-                    else [None] * len(teds), 4
+                    else [None] * len(teds)
                 )
                 model_data[od] = entry
 

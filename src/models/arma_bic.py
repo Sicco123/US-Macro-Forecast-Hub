@@ -15,6 +15,7 @@ Comparison space:
 This is meant to be run by a contributor to generate their submission file.
 """
 
+import argparse
 import warnings
 from pathlib import Path
 
@@ -23,7 +24,6 @@ import pandas as pd
 from scipy import stats
 from statsmodels.tsa.arima.model import ARIMA
 
-warnings.filterwarnings("ignore")
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
 TARGET_DATA_PATH = HUB_ROOT / "target-data" / "latest-target_values.csv"
@@ -68,51 +68,70 @@ def last_day_of_month(year: int, month: int) -> str:
     return (next_month - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
 
-def select_arma_order(window: np.ndarray) -> tuple[int, int]:
-    """Select (p, q) by minimizing BIC over a grid search using CSS on a
-    pre-differenced series (d=0)."""
-    best_bic = np.inf
-    best_order = (1, 0)
+def fit_arma(window, p, q):
+    """Fit on standardized changes and reject failed or unstable estimates."""
+    window = np.asarray(window, dtype=float)
+    if window.ndim != 1 or len(window) < 24 or not np.isfinite(window).all():
+        raise ValueError("ARMA requires at least 24 finite monthly changes")
+    center, scale = window.mean(), window.std() or 1.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        result = ARIMA((window - center) / scale, order=(p, 0, q),
+                       enforce_stationarity=True, enforce_invertibility=True).fit(
+                           method="statespace", method_kwargs={"maxiter": 200})
+    if (not result.mle_retvals.get("converged", False)
+            or not np.isfinite(result.bic)
+            or not np.isfinite(result.params).all()
+            or np.any(np.abs(result.arroots) <= 1)
+            or np.any(np.abs(result.maroots) <= 1)):
+        raise ValueError(f"ARMA({p},{q}) did not produce a converged stable fit")
+    return result, center, scale
 
-    for p in range(MAX_P + 1):
-        for q in range(MAX_Q + 1):
-            if p == 0 and q == 0:
-                continue
+
+def select_arma_order(window, max_p=MAX_P, max_q=MAX_Q):
+    """BIC over supported, converged stationary ARMA fits, including white noise."""
+    best_bic, best_order = np.inf, None
+    for p in range(max_p + 1):
+        for q in range(max_q + 1):
             try:
-                result = ARIMA(window, order=(p, 0, q)).fit(
-                    method="css", method_kwargs={"maxiter": 100})
-                if result.bic < best_bic:
-                    best_bic = result.bic
-                    best_order = (p, q)
-            except Exception:
+                result, _, _ = fit_arma(window, p, q)
+            except (ValueError, np.linalg.LinAlgError):
                 continue
-
+            if result.bic < best_bic:
+                best_bic, best_order = result.bic, (p, q)
+    if best_order is None:
+        raise ValueError("No converged ARMA candidate; no substitute forecast was saved")
     return best_order
 
 
-def forecast_arma(window: np.ndarray, p: int, q: int,
-                  n_ahead: int) -> tuple[np.ndarray, np.ndarray]:
-    """Fit ARMA(p,q) and return (point_forecasts, forecast_std)
-    in the pre-differenced (Δlog or Δ) space."""
-    result = ARIMA(window, order=(p, 0, q)).fit(
-        method_kwargs={"maxiter": 200})
+def forecast_arma(window, p, q, n_ahead):
+    result, center, scale = fit_arma(window, p, q)
     fc = result.get_forecast(steps=n_ahead)
-    return np.array(fc.predicted_mean), np.array(fc.se_mean)
+    point = np.asarray(fc.predicted_mean) * scale + center
+    std = np.asarray(fc.se_mean) * scale
+    if not np.isfinite(point).all() or not np.isfinite(std).all() or (std < 0).any():
+        raise ValueError("ARMA produced invalid forecast moments")
+    return point, std
 
 
-def generate_forecasts(target_df: pd.DataFrame, origin_date: str) -> list[dict]:
+def generate_forecasts(target_df: pd.DataFrame, origin_date: str, orders=None) -> list[dict]:
     """Generate ARMA-BIC forecasts for all targets in log-diff / diff space."""
     records = []
     origin = pd.Timestamp(origin_date)
 
     for target in TARGETS:
         series_df = target_df[target_df["target"] == target].copy()
+        series_df["truth_date"] = pd.to_datetime(series_df["truth_date"])
         series_df = series_df.sort_values("truth_date")
-        series_df = series_df[series_df["truth_date"] < origin.strftime("%Y-%m-%d")]
+        series_df = series_df[series_df["truth_date"] < origin]
+        if series_df.truth_date.duplicated().any():
+            raise ValueError(f"{target}: duplicate observation months")
+        series_df = series_df.set_index("truth_date").asfreq("ME")
+        series_df["value"] = series_df.value.ffill(limit=1)
+        series_df = series_df.reset_index()
 
         if len(series_df) < MIN_HISTORY:
-            print(f"  Skipping {target}: only {len(series_df)} obs (need {MIN_HISTORY})")
-            continue
+            raise ValueError(f"{target}: only {len(series_df)} observations (need {MIN_HISTORY})")
 
         values = series_df["value"].values.astype(float)
         last_date = pd.Timestamp(series_df["truth_date"].iloc[-1])
@@ -122,26 +141,26 @@ def generate_forecasts(target_df: pd.DataFrame, origin_date: str) -> list[dict]:
 
         if take_log:
             if np.any(raw <= 0):
-                print(f"  Skipping {target}: non-positive values, log not safe")
-                continue
+                raise ValueError(f"{target}: non-positive levels cannot be logged")
             raw = np.log(raw)
 
         # Pre-difference: ARMA(p,0,q) on first-differenced (log-)series
         window = np.diff(raw)
 
-        # Select lag order by BIC on pre-differenced series
-        print(f"  {target} (log={take_log}, pre-differenced): "
-              f"selecting ARMA order by BIC ...", end=" ", flush=True)
-        p, q = select_arma_order(window)
-        print(f"ARMA({p},{q})")
-
-        # Generate forecasts in Δlog / Δ space
+        key = (target, origin.year)
+        if orders is None or key not in orders:
+            order = select_arma_order(window)
+            if orders is not None:
+                orders[key] = order
+        else:
+            order = orders[key]
         try:
-            n_ahead = max(HORIZONS) + 1
-            point_fc, std_fc = forecast_arma(window, p, q, n_ahead)
-        except Exception as e:
-            print(f"  Warning: forecast failed for {target}: {e}")
-            continue
+            point_fc, std_fc = forecast_arma(window, *order, max(HORIZONS) + 1)
+        except ValueError:
+            order = select_arma_order(window)
+            point_fc, std_fc = forecast_arma(window, *order, max(HORIZONS) + 1)
+            if orders is not None:
+                orders[key] = order
 
         for horizon in HORIZONS:
             target_month = last_date + pd.DateOffset(months=horizon + 1)
@@ -152,7 +171,7 @@ def generate_forecasts(target_df: pd.DataFrame, origin_date: str) -> list[dict]:
 
             # Quantile forecasts directly in comparison space — no back-transform
             for q_level in REQUIRED_QUANTILES:
-                q_value = stats.norm.ppf(q_level, loc=mu, scale=sigma)
+                q_value = mu + stats.norm.ppf(q_level) * sigma
                 records.append({
                     "origin_date": origin_date,
                     "target": target,
@@ -161,7 +180,7 @@ def generate_forecasts(target_df: pd.DataFrame, origin_date: str) -> list[dict]:
                     "location": "US",
                     "output_type": "quantile",
                     "output_type_id": q_level,
-                    "value": round(float(q_value), 4),
+                    "value": float(q_value),
                 })
 
             records.append({
@@ -172,32 +191,31 @@ def generate_forecasts(target_df: pd.DataFrame, origin_date: str) -> list[dict]:
                 "location": "US",
                 "output_type": "mean",
                 "output_type_id": "",
-                "value": round(float(mu), 4),
+                "value": float(mu),
             })
 
     return records
 
 
 def main():
-    if not TARGET_DATA_PATH.exists():
-        print(f"Target data not found at {TARGET_DATA_PATH}. Run fetch_fred_md.py first.")
-        return
-
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--origin", default="2026-04-15")
+    parser.add_argument("--rebuild", action="store_true", help="Repair all existing ARMA files")
+    args = parser.parse_args()
     target_df = pd.read_csv(TARGET_DATA_PATH)
-    origin_date = "2026-04-15"
-
-    print(f"Generating ARIMA-BIC forecasts for origin_date={origin_date}")
-    records = generate_forecasts(target_df, origin_date)
-
-    if not records:
-        print("No forecasts generated.")
-        return
-
-    forecast_df = pd.DataFrame(records)
+    origins = sorted(p.name[:10] for p in OUTPUT_DIR.glob("*.csv")) if args.rebuild else [args.origin]
+    orders = {}  # Select annually during historical runs; refit at every origin.
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / f"{origin_date}-BASELINE-ARMA_BIC.csv"
-    forecast_df.to_csv(output_path, index=False)
-    print(f"\nSaved {len(forecast_df)} rows to {output_path}")
+    for i, origin in enumerate(origins, 1):
+        path = OUTPUT_DIR / f"{origin}-BASELINE-ARMA_BIC.csv"
+        forecasts = pd.DataFrame(generate_forecasts(target_df, origin, orders=orders))
+        if path.exists():
+            existing = pd.read_csv(path)
+            forecasts = pd.concat([existing.loc[~existing.target.isin(TARGETS)], forecasts], ignore_index=True)
+        temporary = path.with_suffix(".csv.tmp")
+        forecasts.to_csv(temporary, index=False)
+        temporary.replace(path)
+        print(f"[{i}/{len(origins)}] Rebuilt {origin}", flush=True)
 
 
 if __name__ == "__main__":

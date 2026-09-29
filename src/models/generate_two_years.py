@@ -16,20 +16,20 @@ Comparison space (forecasts and truth evaluated in same transformed scale):
 
 Speed:
   - ARMA on rolling 10-year (120 obs) window, re-selected every month
-  - CSS estimation for grid search (fast); MLE only for final forecast
+  - Converged, stationary state-space MLE fits for BIC selection and forecasts
   - Vectorised quantile generation via scipy broadcasting
   - Single process (no multiprocessing, safe on 16 GB machines)
 """
 
-import warnings
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy import stats
-from statsmodels.tsa.arima.model import ARIMA
+try:
+    from .arma_bic import generate_forecasts
+except ImportError:  # Direct script execution.
+    from arma_bic import generate_forecasts
 
-warnings.filterwarnings("ignore")
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
 TARGET_DATA_PATH = HUB_ROOT / "target-data" / "latest-target_values.csv"
@@ -103,10 +103,10 @@ def _build_rows(origin_str, target, teds, qval_matrix, mean_arr):
     rows = []
     for h in range(N_AHEAD):
         ted = teds[h]
-        mv = round(float(mean_arr[h]), 6)
+        mv = float(mean_arr[h])
         for qi in range(N_Q):
             rows.append((origin_str, target, ted, h, "US", "quantile",
-                         float(QUANTILES[qi]), round(float(qval_matrix[h, qi]), 6)))
+                         float(QUANTILES[qi]), float(qval_matrix[h, qi])))
         rows.append((origin_str, target, ted, h, "US", "mean", "", mv))
     return rows
 
@@ -171,103 +171,16 @@ def generate_rw(series_dict, origin_str, targets):
     return all_rows
 
 
-# ── ARIMA(p,d,q)-BIC with FRED-MD transformations ─────────────────────────
-#
-# Each target uses its standard FRED-MD transformation code (tcode):
-#   1 = levels          4 = log            7 = Δ(x/x_{-1})
-#   2 = Δx              5 = Δlog(x)
-#   3 = Δ²x             6 = Δ²log(x)
-#
-# We map tcode → (take_log, d) and fit ARIMA(p, d, q) on the (possibly
-# log-transformed) levels.  statsmodels handles differencing internally,
-# so get_forecast() returns predictions in the (log-)level scale.  We then
-# exp() back if needed.  Quantiles transform correctly since exp is monotone.
-
-# Targets whose forecasts (and truth) are in log-diff or diff space
 LOG_DIFF_TARGETS = {"INDPRO", "CPIAUCSL", "PCEPI"}
 DIFF_TARGETS = {"UNRATE"}
 
-# TCODE used only to determine whether to take log before differencing
-TCODE = {
-    "INDPRO": 5,     # take log, then first difference → Δlog
-    "CPIAUCSL": 5,   # take log, then first difference → Δlog
-    "PCEPI": 5,      # take log, then first difference → Δlog
-    "UNRATE": 2,     # first difference → Δx
-}
-
-def _tcode_params(tcode):
-    """Return (take_log, d) for a FRED-MD transformation code."""
-    return {
-        1: (False, 0), 2: (False, 1), 3: (False, 2),
-        4: (True, 0),  5: (True, 1),  6: (True, 2),
-        7: (False, 1),
-    }[tcode]
-
-
-def select_arima_order(window, d):
-    """BIC grid search over ARIMA(p, d, q) using CSS estimation (fast)."""
-    best_bic, best_order = np.inf, (1, 0)
-    for p, q in GRID:
-        try:
-            res = ARIMA(window, order=(p, d, q)).fit(
-                method="css", method_kwargs={"maxiter": 100})
-            if res.bic < best_bic:
-                best_bic = res.bic
-                best_order = (p, q)
-        except Exception:
-            continue
-    return best_order
-
 
 def generate_arma(series_dict, origin_str, targets):
-    origin_ts = np.datetime64(origin_str)
-    all_rows = []
-
-    for target in targets:
-        dates, values = series_dict[target]
-        vals, dts = slice_before(dates, values, origin_ts)
-        if len(vals) < MIN_HISTORY:
-            continue
-
-        last_date = pd.Timestamp(dts[-1])
-        teds = _target_end_dates(last_date)
-
-        take_log, _ = _tcode_params(TCODE[target])
-        raw = vals[-MAX_HISTORY:]
-
-        if take_log:
-            if np.any(raw <= 0):
-                continue  # log not safe
-            raw = np.log(raw)
-
-        # Pre-difference: ARMA(p,0,q) on the first-differenced (log-)series
-        # Forecasts are directly in Δlog or Δ space — no back-transform needed
-        window = np.diff(raw)
-
-        # Fast CSS grid search over ARMA(p, 0, q)
-        p, q = select_arima_order(window, 0)
-
-        # Final forecast with MLE for proper uncertainty
-        try:
-            res = ARIMA(window, order=(p, 0, q)).fit(
-                method_kwargs={"maxiter": 200})
-            fc = res.get_forecast(steps=N_AHEAD)
-            pt = np.array(fc.predicted_mean)   # in Δlog or Δ space
-            st = np.array(fc.se_mean)
-        except Exception:
-            continue
-
-        # Quantiles in Δlog / Δ space — output directly, no back-transform
-        qval_matrix = stats.norm.ppf(
-            QUANTILES[np.newaxis, :],
-            loc=pt[:, np.newaxis],
-            scale=st[:, np.newaxis],
-        )
-        mean_arr = pt
-
-        all_rows.extend(_build_rows(origin_str, target, teds, qval_matrix, mean_arr))
-
-    return all_rows
+    target_df = pd.concat([
+        pd.DataFrame({"target": target, "truth_date": series_dict[target][0], "value": series_dict[target][1]})
+        for target in targets
+    ], ignore_index=True)
+    return generate_forecasts(target_df, origin_str)
 
 
 # ── Process one origin date ────────────────────────────────────────────────
