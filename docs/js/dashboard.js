@@ -13,6 +13,7 @@
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
     })[c]),
     format: (value) => Number.isFinite(value) ? value.toLocaleString(undefined, { maximumSignificantDigits: 6 }) : "—",
+    modelName: (value) => String(value).replace(/^(MacroHub|BASELINE)[- _]+/i, ""),
     point: (entry, i) => Number.isFinite(entry.mean?.[i])
       ? { value: entry.mean[i], statistic: "Mean" }
       : { value: entry.q050?.[i] ?? null, statistic: "Median" },
@@ -85,15 +86,16 @@
       link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     },
     // Rank each origin/horizon cell before averaging. Equal values share the minimum rank.
-    summarize(data, metric, { horizon, yFrom, yTo, includeCovid }) {
+    summarize(data, metric, { horizon, yFrom, yTo, includeCovid, includeGfc = true }) {
       const result = {};
       for (const [target, sd] of Object.entries(data)) {
         const models = Object.keys(sd.models);
-        const sums = Object.fromEntries(models.map((m) => [m, { score: 0, rank: 0, count: 0 }]));
+        const sums = Object.fromEntries(models.map((m) => [m, { score: 0, rank: 0, count: 0, log: 0, relativeCount: 0, zeros: 0 }]));
         const hKeys = [...new Set(models.flatMap((m) => Object.keys(sd.models[m])))].filter((h) => horizon === "all" || h === `h${horizon}`);
         sd.origin_dates.forEach((date, i) => {
           const year = +date.slice(0, 4), month = date.slice(0, 7);
           if (year < yFrom || year > yTo || (!includeCovid && month >= "2020-03" && month <= "2021-06")) return;
+          if (!includeGfc && month >= "2007-12" && month <= "2009-06") return;
           for (const h of hKeys) {
             const cell = models.map((m) => ({ m, v: sd.models[m][h]?.[metric]?.[i] })).filter((x) => Number.isFinite(x.v)).sort((a, b) => a.v - b.v);
             let rank = 1;
@@ -104,12 +106,16 @@
               const storedRank = sd.models[m][h]?.[`${metric}_rank`]?.[i];
               sums[m].rank += (Number.isFinite(storedRank) ? storedRank : rank) * weight;
               sums[m].count += weight;
+              sums[m].log += sd.models[m][h]?.[`${metric}_log_sum`]?.[i] ?? 0;
+              sums[m].relativeCount += sd.models[m][h]?.[`${metric}_relative_count`]?.[i] ?? 0;
+              sums[m].zeros += sd.models[m][h]?.[`${metric}_zeros`]?.[i] ?? 0;
             });
           }
         });
         for (const [m, s] of Object.entries(sums)) {
           result[m] ||= {};
           result[m][target] = { count: s.count,
+            geomean: s.relativeCount ? (s.zeros ? 0 : Math.exp(s.log / s.relativeCount / (metric === "SqErr" ? 2 : 1))) : null,
             rank: s.count ? s.rank / s.count : null,
             score: s.count ? (metric === "SqErr" ? Math.sqrt(s.score / s.count) : s.score / s.count) : null };
         }

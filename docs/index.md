@@ -1,77 +1,81 @@
-<div class="arena-hero" markdown="0">
-  <span class="arena-live">Forecasting research</span>
-  <h1>Macro Forecast Hub</h1>
-  <p>Explore probabilistic forecasts of U.S. macroeconomic indicators,
-  compare model accuracy, and contribute your forecasts.</p>
-  <div class="arena-cta">
-    <a href="forecasts/latest/">Explore forecasts →</a>
-    <a class="secondary" href="evaluation/leaderboard/">View leaderboard</a>
-    <a class="secondary" href="participate/how-to-submit/">Submit forecasts</a>
-  </div>
-  <div class="arena-countdown" id="arena-countdown"></div>
+---
+hide:
+  - toc
+  - navigation
+---
+
+# Evaluation
+
+<div id="eval-dashboard" data-view="scores" markdown="0">
+<p id="eval-status" role="status" aria-live="polite">Loading…</p>
+<button id="eval-retry" class="dash-btn" hidden>Retry</button>
+
+<div id="eval-panel-scores">
+
+<div class="dash-controls">
+  <label>Target
+    <select id="eval-target">
+      <option value="INDPRO">Industrial production (INDPRO)</option>
+      <option value="CPIAUCSL">Consumer prices (CPIAUCSL)</option>
+      <option value="PCEPI">PCE prices (PCEPI)</option>
+      <option value="UNRATE">Unemployment (UNRATE)</option>
+    </select>
+  </label>
+  <label>Metric
+    <select id="eval-metric">
+      <option value="MAE">MAE</option>
+      <option value="SqErr">RMSE</option>
+      <option value="QuantileLoss">Quantile loss</option>
+    </select>
+  </label>
+  <label>Horizon
+    <select id="eval-horizon">
+      <option value="all">All</option>
+      <option value="0">1 month</option>
+      <option value="1">2 months</option>
+      <option value="2">3 months</option>
+      <option value="3">4 months</option>
+      <option value="4">5 months</option>
+      <option value="5">6 months</option>
+      <option value="6">7 months</option>
+      <option value="7">8 months</option>
+      <option value="8">9 months</option>
+      <option value="9">10 months</option>
+      <option value="10">11 months</option>
+      <option value="11">12 months</option>
+      <option value="12">13 months</option>
+      <option value="13">14 months</option>
+      <option value="14">15 months</option>
+      <option value="15">16 months</option>
+      <option value="16">17 months</option>
+      <option value="17">18 months</option>
+      <option value="18">19 months</option>
+      <option value="19">20 months</option>
+      <option value="20">21 months</option>
+      <option value="21">22 months</option>
+      <option value="22">23 months</option>
+      <option value="23">24 months</option>
+    </select>
+  </label>
+  <label>From
+    <input type="number" id="eval-year-from" value="2000" min="1900" max="2100">
+  </label>
+  <label>To
+    <input type="number" id="eval-year-to" value="2026" min="1900" max="2100">
+  </label>
+  <button id="eval-reset-zoom" class="dash-btn" title="Reset zoom to full range">&#x21ba; Reset Zoom</button>
 </div>
 
-<p class="dash-freshness" data-dashboard-freshness></p>
+<div class="dash-models" id="eval-models">Loading models...</div>
 
-The explorer and rankings include historical backfills. Historical performance
-is distinct from forecasts submitted during a prospective registration window.
+<p id="eval-description" class="visually-hidden"></p>
+<div class="dash-chart-grid">
+<div class="dash-chart" id="eval-chart" role="region" aria-label="Rolling model errors" aria-describedby="eval-description"></div>
+<div class="dash-chart" id="eval-cumulative-chart" role="region" aria-label="Cumulative model errors"></div>
+</div>
+<details><summary>View monthly scores</summary><div id="eval-data-table" class="dash-table-scroll" role="region" aria-label="Monthly model scores" tabindex="0"></div></details>
 
----
+</div>
 
-## What is this?
 
-The Macro Forecast Hub brings together forecasters from academia, central banks,
-and industry to produce and evaluate probabilistic forecasts of major
-macroeconomic time series. Inspired by the collaborative forecasting hub model
-pioneered in epidemiology, we apply the same rigorous framework to
-macroeconomic forecasting.
-
-### Key Features
-
-| Feature | Description |
-|---------|-------------|
-| **12 Configured Indicators** | Four currently visualized and scored: INDPRO, CPIAUCSL, PCEPI, and UNRATE |
-| **Probabilistic Forecasts** | Predictive distributions via 5 quantile levels (0.05, 0.1, 0.5, 0.9, 0.95) |
-| **24-Hour Registration** | Forecasts pre-registered during a strict 24-hour window on the 17th of each month |
-| **1-24 Month Horizons** | Monthly forecast horizons up to 2 years ahead |
-| **Automated Evaluation** | MAE / RMSE scoring against realized values, relative to a naive benchmark |
-| **Hub Ensemble** | Median combination of all submitted models |
-
----
-
-## Target Indicators
-
-| Category | Indicator | Description |
-|----------|-----------|-------------|
-| **Real Activity** | INDPRO | Industrial Production Index |
-| | PAYEMS | Total Nonfarm Payrolls |
-| | DPCERA3M086SBEA | Real Personal Consumption |
-| | RETAILx | Retail Sales |
-| **Labor Market** | UNRATE | Unemployment Rate |
-| **Prices** | CPIAUCSL | Consumer Price Index |
-| | PCEPI | PCE Price Index |
-| **Interest Rates** | FEDFUNDS | Federal Funds Rate |
-| | GS10 | 10-Year Treasury |
-| | TB3MS | 3-Month Treasury Bill |
-| **Housing** | HOUST | Housing Starts |
-| **Money & Credit** | M2SL | M2 Money Stock |
-
----
-
-## Quick Start
-
-Want to contribute forecasts? See the [How to Submit](participate/how-to-submit.md) guide.
-
-Want to explore the data? Check the [Latest Forecasts](forecasts/latest.md) page.
-
----
-
-## Data Source
-
-All target data comes from [FRED-MD](https://research.stlouisfed.org/econ/mccracken/fred-databases/),
-a monthly macroeconomic database maintained by the Federal Reserve Bank of
-St. Louis.
-
-> McCracken, M.W. and Ng, S. (2016), "FRED-MD: A Monthly Database for
-> Macroeconomic Research," *Journal of Business & Economic Statistics*, 34:4,
-> 574-589.
+</div>

@@ -31,6 +31,7 @@ theme:
     repo: fontawesome/brands/github
   features:
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.expand
     - navigation.top
@@ -41,13 +42,11 @@ theme:
     - content.code.copy
 
 nav:
-  - Home: index.md
+  - Evaluation: index.md
+  - Leaderboard: evaluation/leaderboard.md
   - Forecasts:
     - Latest Forecasts: forecasts/latest.md
     - Forecast Archive: forecasts/archive.md
-  - Evaluation:
-    - Leaderboard: evaluation/leaderboard.md
-    - Methodology: evaluation/methodology.md
   - Participate:
     - How to Submit: participate/how-to-submit.md
     - Submission Format: participate/format.md
@@ -57,6 +56,7 @@ nav:
     - Target Data: indicators/target-data.md
   - About:
     - About the Hub: about/index.md
+    - Methodology: evaluation/methodology.md
     - Team: about/team.md
 
 plugins:
@@ -96,7 +96,6 @@ extra_javascript:
 
 extra_css:
   - css/dashboard.css
-  - css/arena.css
 
 extra:
   social:

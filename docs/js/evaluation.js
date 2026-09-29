@@ -1,10 +1,4 @@
-/**
- * Interactive evaluation dashboard.
- *
- * Two tabs:
- *   1. "Scores" — time-series of a chosen metric
- *   2. "Summary" — table of avg rank/score per model x target
- */
+/* Shared controller for the separate Evaluation and Leaderboard pages. */
 (function () {
   "use strict";
 
@@ -30,15 +24,14 @@
 
   let scoresCache = {};
   let currentTarget = null;
-  let activeTab = "summary", scoreRequest = 0, summaryRequest = 0;
+  const activeTab = ROOT.getAttribute("data-view");
+  let scoreRequest = 0, summaryRequest = 0;
   let savedModels = null;
   let summarySort = "Overall";
   let minYear = 2000, maxYear = new Date().getFullYear();
   let selectedModels = new Set();
   let modelColorMap = {};          // stable model → color mapping
 
-  const tabScores = ROOT.querySelector("#eval-tab-scores");
-  const tabSummary = ROOT.querySelector("#eval-tab-summary");
   const panelScores = ROOT.querySelector("#eval-panel-scores");
   const panelSummary = ROOT.querySelector("#eval-panel-summary");
 
@@ -58,19 +51,19 @@
   const sumYearFrom = ROOT.querySelector("#eval-sum-year-from");
   const sumYearTo = ROOT.querySelector("#eval-sum-year-to");
   const sumCovidCb = ROOT.querySelector("#eval-sum-covid");
+  const sumGfcCb = ROOT.querySelector("#eval-sum-gfc");
   const sumTableDiv = ROOT.querySelector("#eval-sum-table");
 
   const status = ROOT.querySelector("#eval-status");
   const retry = ROOT.querySelector("#eval-retry");
-  const controls = { target: selTarget, metric: selMetric, horizon: selHorizon, from: yearFrom, to: yearTo,
+  const controls = Object.fromEntries(Object.entries({ target: selTarget, metric: selMetric, horizon: selHorizon, from: yearFrom, to: yearTo,
     summaryMetric: selSumMetric, summaryView: selSumView, summaryHorizon: selSumHorizon,
-    summaryFrom: sumYearFrom, summaryTo: sumYearTo, covid: sumCovidCb };
+    summaryFrom: sumYearFrom, summaryTo: sumYearTo, covid: sumCovidCb, gfc: sumGfcCb }).filter(([, input]) => input));
   function saveState() { D.save(controls, { view: activeTab, sort: summarySort, ...(savedModels !== null ? { models: savedModels.join(",") } : currentTarget ? { models: [...selectedModels].join(",") } : {}) }); }
   function readState() {
     const params = new URLSearchParams(location.search);
     D.restore(controls, params);
     savedModels = params.has("models") ? params.get("models").split(",") : null;
-    activeTab = params.get("view") === "scores" ? "scores" : "summary";
     summarySort = ["Model", "Overall", "INDPRO", "CPIAUCSL", "PCEPI", "UNRATE"].includes(params.get("sort")) ? params.get("sort") : "Overall";
   }
   function clearCharts() {
@@ -83,35 +76,19 @@
     return `rgba(${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)},${a})`;
   }
 
-  function switchTab(tab) {
-    activeTab = tab;
-    const isScores = tab === "scores";
-    for (const [button, selected] of [[tabScores, isScores], [tabSummary, !isScores]]) {
-      button.classList.toggle("eval-tab-active", selected);
-      button.setAttribute("aria-selected", String(selected)); button.tabIndex = selected ? 0 : -1;
-    }
-    panelScores.hidden = !isScores; panelSummary.hidden = isScores;
-    if (isScores) onTargetChange(); else drawSummary();
-  }
-
   function init() {
-    tabScores.addEventListener("click", () => switchTab("scores"));
-    tabSummary.addEventListener("click", () => switchTab("summary"));
-    ROOT.querySelector('[role="tablist"]').addEventListener("keydown", (e) => {
-      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
-      e.preventDefault();
-      const tab = e.key === "Home" ? "summary" : e.key === "End" ? "scores" : activeTab === "scores" ? "summary" : "scores";
-      switchTab(tab); (tab === "scores" ? tabScores : tabSummary).focus();
-    });
-    selTarget.addEventListener("change", onTargetChange);
-    [selMetric, selHorizon, yearFrom, yearTo].forEach((el) => el.addEventListener("change", drawChart));
-    btnResetZoom.addEventListener("click", () => { yearFrom.value = minYear; yearTo.value = maxYear; drawChart(); });
-    [selSumMetric, selSumView, selSumHorizon, sumYearFrom, sumYearTo, sumCovidCb].forEach((el) => el.addEventListener("change", drawSummary));
+    if (activeTab === "scores") {
+      selTarget.addEventListener("change", onTargetChange);
+      [selMetric, selHorizon, yearFrom, yearTo].forEach((el) => el.addEventListener("change", drawChart));
+      btnResetZoom.addEventListener("click", () => { yearFrom.value = minYear; yearTo.value = maxYear; drawChart(); });
+    } else {
+      [selSumMetric, selSumView, selSumHorizon, sumYearFrom, sumYearTo, sumCovidCb, sumGfcCb].forEach((el) => el.addEventListener("change", drawSummary));
+    }
     retry.addEventListener("click", () => activeTab === "scores" ? onTargetChange() : drawSummary());
     new MutationObserver(() => { Object.keys(modelColorMap).sort().forEach((m, i) => { modelColorMap[m] = D.color(i); }); if (activeTab === "scores") drawChart(); })
       .observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
-    window.addEventListener("popstate", () => { readState(); switchTab(activeTab); });
-    readState(); switchTab(activeTab);
+    window.addEventListener("popstate", () => { readState(); activeTab === "scores" ? onTargetChange() : drawSummary(); });
+    readState(); activeTab === "scores" ? onTargetChange() : drawSummary();
   }
 
   async function loadScores(target) {
@@ -154,7 +131,7 @@
       .map((m) => {
         const c = modelColorMap[m];
         return `<label><input type="checkbox" value="${D.escape(m)}" ${selectedModels.has(m) ? "checked" : ""}
-                 style="accent-color:${c}"> <span style="color:${c}; font-weight:600" aria-hidden="true">●</span> ${D.escape(m)}</label>`;
+                 style="accent-color:${c}"> <span style="color:${c}; font-weight:600" aria-hidden="true">●</span> ${D.escape(D.modelName(m))}</label>`;
       })
       .join("");
     modelBox.querySelectorAll("input").forEach((cb) => {
@@ -194,7 +171,7 @@
 
     const metricKey = selMetric.value;
     const isRMSE = metricKey === "SqErr";
-    const displayName = isRMSE ? "RMSE" : metricKey;
+    const displayName = isRMSE ? "RMSE" : metricKey === "QuantileLoss" ? "Quantile loss" : metricKey;
 
     const horizon = selHorizon.value;  // "all" or "0","1",...
     const yFrom = parseInt(yearFrom.value) || minYear;
@@ -233,7 +210,7 @@
         }
       });
 
-      filtDates.forEach((date, i) => rows.push([model, date, isRMSE ? Math.sqrt(filtVals[i]) : filtVals[i]]));
+      filtDates.forEach((date, i) => rows.push([D.modelName(model), date, isRMSE ? Math.sqrt(filtVals[i]) : filtVals[i]]));
       // 12-month rolling avg, then sqrt for RMSE
       const rolling = [];
       for (let i = 0; i < filtVals.length; i++) {
@@ -252,19 +229,19 @@
       });
 
       traces.push({
-        x: filtDates, y: rolling, mode: "lines", name: model,
+        x: filtDates, y: rolling, mode: "lines", name: D.modelName(model),
         line: { color: color, width: 2.5, dash: D.dashes[Object.keys(data.models).sort().indexOf(model) % D.dashes.length] },
-        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.6g}<extra>" + D.escape(model) + "</extra>",
+        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.6g}<extra>" + D.escape(D.modelName(model)) + "</extra>",
       });
     });
 
-    status.textContent = rows.length ? `Showing ${selectedModels.size} model(s). Lower ${displayName} is better.` : "No scores for this selection. Select a model or widen the period.";
+    status.textContent = rows.length ? "" : "No scores for this selection. Select a model or widen the period.";
     ROOT.querySelector("#eval-description").textContent = `${selTarget.selectedOptions[0].textContent}; ${displayName}, ${hLabel}, origins ${yFrom}–${yTo}. Bold lines show rolling averages over up to 12 available origins. The table gives monthly values. Cumulative totals depend on coverage.`;
     D.table(ROOT.querySelector("#eval-data-table"), ["Model", "Origin", displayName], rows.map((r) => [r[0], r[1], D.format(r[2])]), `${currentTarget} — ${displayName} (${hLabel})`);
     const dark = isDark();
     const layout = {
       font: plotlyFont(),
-      title: { text: `${currentTarget} \u2014 ${displayName} (${hLabel})`,
+      title: { text: `Rolling ${displayName}`,
                font: { size: 16, color: dark ? "#ddd" : "#333" }, x: 0.01 },
       xaxis: {
         range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
@@ -287,21 +264,14 @@
     drawCumulativeChart();
   }
 
-  // --- cumulative error chart (only for MAE and RMSE) ---
+  // Cumulative losses use squared error for RMSE.
   function drawCumulativeChart() {
     const metricKey = selMetric.value;
-    if (metricKey !== "MAE" && metricKey !== "SqErr") {
-      Plotly.purge(cumChartDiv);
-      cumChartDiv.style.display = "none";
-      return;
-    }
-    cumChartDiv.style.display = "block";
-
     const data = scoresCache[currentTarget];
     if (!data) { Plotly.purge(cumChartDiv); return; }
 
     const isRMSE = metricKey === "SqErr";
-    const displayName = isRMSE ? "Cumulative Squared Error" : "Cumulative Absolute Error";
+    const displayName = isRMSE ? "Squared error" : metricKey === "QuantileLoss" ? "Quantile loss" : "Absolute error";
 
     const horizon = selHorizon.value;
     const hLabel = horizon === "all" ? "all horizons"
@@ -342,17 +312,17 @@
       });
 
       traces.push({
-        x: filtDates, y: cumVals, mode: "lines", name: model,
+        x: filtDates, y: cumVals, mode: "lines", name: D.modelName(model),
         line: { color: color, width: 2.2, dash: D.dashes[Object.keys(data.models).sort().indexOf(model) % D.dashes.length] },
         fill: "tozeroy", fillcolor: hexToRgba(color, 0.08),
-        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.6g}<extra>" + D.escape(model) + "</extra>",
+        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.6g}<extra>" + D.escape(D.modelName(model)) + "</extra>",
       });
     });
 
     const dark = isDark();
     const layout = {
       font: plotlyFont(),
-      title: { text: `Total ${isRMSE ? "squared" : "absolute"} error`, font: { size: 14, color: dark ? "#ccc" : "#555" }, x: 0.01 },
+      title: { text: `Cumulative ${displayName.toLowerCase()}`, font: { size: 14, color: dark ? "#ccc" : "#555" }, x: 0.01 },
       xaxis: {
         range: [`${yFrom}-01-01`, `${yTo + 1}-01-01`],
         ...plotlyGrid(), tickformat: "%Y",
@@ -363,7 +333,7 @@
                 font: { size: 12 }, bgcolor: "rgba(0,0,0,0)" },
       margin: { t: 36, r: 16, b: 70, l: chartDiv.clientWidth < 500 ? 48 : 75 },
       hovermode: "x unified", hoverlabel: { bgcolor: dark ? "#2e2e2e" : "#fff", font: { color: dark ? "#ddd" : "#333" } },
-      height: 340,
+      height: chartDiv.clientWidth < 500 ? 420 : 500,
       plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
     };
 
@@ -388,33 +358,33 @@
       const params = new URLSearchParams(location.search);
       if (!params.has("summaryFrom") && dates.length) sumYearFrom.value = dates[0].slice(0, 4);
       if (!params.has("summaryTo") && dates.length) sumYearTo.value = dates.at(-1).slice(0, 4);
-      if (!params.has("from") && dates.length) yearFrom.value = dates[0].slice(0, 4);
-      if (!params.has("to") && dates.length) yearTo.value = dates.at(-1).slice(0, 4);
       const metric = selSumMetric.value, view = selSumView.value;
-      const result = D.summarize(scoresCache, metric, { horizon: selSumHorizon.value, yFrom: +sumYearFrom.value, yTo: +sumYearTo.value, includeCovid: sumCovidCb.checked });
-      const targets = view === "rank" ? [...SUMMARY_TARGETS, "Overall"] : SUMMARY_TARGETS;
+      const result = D.summarize(scoresCache, metric, { horizon: selSumHorizon.value, yFrom: +sumYearFrom.value, yTo: +sumYearTo.value, includeCovid: sumCovidCb.checked, includeGfc: sumGfcCb.checked });
+      const targets = view !== "score" ? ["Overall", ...SUMMARY_TARGETS] : SUMMARY_TARGETS;
       if (summarySort !== "Model" && !targets.includes(summarySort)) summarySort = targets[0];
       const value = (model, target) => {
         if (target !== "Overall") return result[model][target]?.[view] ?? null;
-        const ranks = SUMMARY_TARGETS.map((t) => result[model][t]?.rank).filter(Number.isFinite);
-        return ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : null;
+        const values = SUMMARY_TARGETS.map((t) => result[model][t]?.[view]);
+        if (!values.every(Number.isFinite)) return null;
+        return view === "geomean"
+          ? values.includes(0) ? 0 : Math.exp(values.reduce((sum, v) => sum + Math.log(v), 0) / values.length)
+          : values.reduce((sum, v) => sum + v, 0) / values.length;
       };
       const models = Object.keys(result).sort((a, b) => summarySort === "Model" ? a.localeCompare(b) : (value(a, summarySort) ?? Infinity) - (value(b, summarySort) ?? Infinity) || a.localeCompare(b));
       const count = models.reduce((total, m) => total + SUMMARY_TARGETS.reduce((n, t) => n + (result[m][t]?.count || 0), 0), 0);
-      if (!count) { status.textContent = "No scores in this range. Widen the dates or include COVID origins."; saveState(); return; }
-      const displayName = metric === "SqErr" ? "RMSE" : "MAE";
-      const hLabel = selSumHorizon.value === "all" ? "all horizons" : `${+selSumHorizon.value + 1} month(s)`;
-      let html = `<table class="eval-summary-table"><caption>${displayName} — average ${view}; ${hLabel}; origins ${sumYearFrom.value}–${sumYearTo.value}${sumCovidCb.checked ? "" : "; excluding COVID"}. Lower is better. Counts are scored cells; compare coverage before ranks.</caption><thead><tr>`;
-      for (const t of ["Model", ...targets]) html += `<th scope="col" aria-sort="${summarySort === t ? "ascending" : "none"}"><button class="dash-sort" data-sort="${t}">${t}${summarySort === t ? " ↑" : ""}</button></th>`;
+      if (!count) { status.textContent = "No scores for this selection. Widen the period or include crisis origins."; saveState(); return; }
+      const displayName = metric === "SqErr" ? "RMSE" : metric === "QuantileLoss" ? "Quantile loss" : "MAE";
+      const columns = targets.includes("Overall") ? ["Overall", "Model", ...SUMMARY_TARGETS] : ["Model", ...targets];
+      let html = `<table class="eval-summary-table"><caption class="visually-hidden">${displayName} — ${view === "geomean" ? "geometric mean relative to RandomWalk" : view}; lower is better.</caption><thead><tr>`;
+      for (const t of columns) html += `<th scope="col" aria-sort="${summarySort === t ? "ascending" : "none"}"><button class="dash-sort" data-sort="${t}">${t}${summarySort === t ? " ↑" : ""}</button></th>`;
       html += "</tr></thead><tbody>";
       const best = Object.fromEntries(targets.map((t) => [t, Math.min(...models.map((m) => value(m, t) ?? Infinity))]));
       for (const m of models) {
-        html += `<tr><th scope="row">${D.escape(m)}</th>`;
-        for (const t of targets) {
-          const v = value(m, t), c = result[m][t];
-          const winner = v !== null && v === best[t];
-          const coverage = c ? `${c.count.toLocaleString()} cells` : `${SUMMARY_TARGETS.filter((tgt) => result[m][tgt]?.count).length} / ${SUMMARY_TARGETS.length} targets`;
-          html += `<td${winner ? ' class="best"' : ""}>${v === null ? "Unavailable" : view === "rank" ? v.toFixed(2) : D.format(v)}${winner ? '<span class="dash-best">Best</span>' : ""}<small>${coverage}</small></td>`;
+        html += "<tr>";
+        for (const t of columns) {
+          if (t === "Model") { html += `<th scope="row">${D.escape(D.modelName(m))}</th>`; continue; }
+          const v = value(m, t), winner = v !== null && v === best[t];
+          html += `<td${winner ? ' class="best"' : ""}>${v === null ? "—" : view === "score" ? D.format(v) : v.toFixed(2)}${winner ? '<span class="visually-hidden"> (best)</span>' : ""}</td>`;
         }
         html += "</tr>";
       }
@@ -423,7 +393,7 @@
         summarySort = button.dataset.sort; await drawSummary();
         sumTableDiv.querySelector(`[data-sort="${summarySort}"]`)?.focus();
       }));
-      status.textContent = `Rankings loaded for ${models.length} models. ${view === "rank" ? "Tied scores share a rank." : "Absolute scores use each indicator's units; there is no mixed-unit overall score."}`;
+      status.textContent = "";
       saveState();
     } catch {
       if (id !== summaryRequest || activeTab !== "summary") return;

@@ -34,7 +34,7 @@ function environment(page, query = '') {
     focus() { this.focused = true; }
     append(el) { this.children.push(el); }
   }
-  const md = read(page === 'fc' ? 'docs/forecasts/latest.md' : 'docs/evaluation/leaderboard.md');
+  const md = read(page === 'fc' ? 'docs/forecasts/latest.md' : page === 'history' ? 'docs/index.md' : 'docs/evaluation/leaderboard.md');
   for (const m of md.matchAll(/<(\w+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) elements[m[3]] = new Element(m[1], m[2]);
   for (const m of md.matchAll(/<select\b[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/select>/g)) {
     const el = elements[m[1]];
@@ -55,7 +55,7 @@ function environment(page, query = '') {
   context.Dashboard.json = async name => data(name);
   const file = page === 'fc' ? 'forecasts' : 'evaluation';
   let code = read(`docs/js/${file}.js`);
-  code = code.replace('  if (document.readyState', `  window.testUI = { init, onTargetChange${page === 'fc' ? ', onRangeChange, stepSlider' : ', switchTab, drawSummary, drawChart'} };\n  if (document.readyState`);
+  code = code.replace('  if (document.readyState', `  window.testUI = { init, onTargetChange${page === 'fc' ? ', onRangeChange, stepSlider' : ', drawSummary, drawChart'} };\n  if (document.readyState`);
   vm.runInContext(code, context);
   return {context, elements, D:context.Dashboard, ui:context.testUI};
 }
@@ -70,6 +70,8 @@ function environment(page, query = '') {
     assert.ok(el.textContent.includes(expected), el.textContent);
   }
   const {D} = environment('fc');
+  assert.equal(D.modelName('MacroHub-TVNN-EW'),'TVNN-EW');
+  assert.equal(D.modelName('BASELINE-ARMA_BIC'),'ARMA_BIC');
   const ensemble = data('forecasts_CPIAUCSL.json').models['MacroHub-Ensemble']['2000-01-17'];
   assert.equal(D.point(ensemble,0).statistic,'Median'); assert.equal(D.point(ensemble,0).value,0.0021);
   assert.equal(D.point({mean:[0],q050:[4]},0).value,0);
@@ -80,6 +82,16 @@ function environment(page, query = '') {
   assert.equal(result.A.X.rank,2); assert.equal(result.B.X.rank,1.5); assert.equal(result.C.X.rank,1.5);
   assert.equal(result.A.X.count,2); assert.equal(D.summarize(tiny,'SqErr',opts).A.X.score,Math.sqrt(50));
   assert.equal(D.summarize(tiny,'MAE',{...opts,yFrom:2021}).A.X.score,null);
+  const geo = {X:{origin_dates:['2008-01-17','2020-04-17','2022-01-17'],models:{A:{h0:{
+    QuantileLoss:[2,8,4], QuantileLoss_log_sum:[Math.log(2),Math.log(8),Math.log(4)],
+    QuantileLoss_relative_count:[1,1,1], QuantileLoss_zeros:[0,0,0]
+  }}}}};
+  assert.ok(Math.abs(D.summarize(geo,'QuantileLoss',opts).A.X.geomean-4)<1e-12);
+  assert.equal(D.summarize(geo,'QuantileLoss',{...opts,includeCovid:false,includeGfc:false}).A.X.geomean,4);
+  geo.X.models.A.h0.QuantileLoss_zeros[0]=1;
+  assert.equal(D.summarize(geo,'QuantileLoss',opts).A.X.geomean,0);
+  geo.X.models.A.h0.QuantileLoss_relative_count=[0,0,0];
+  assert.equal(D.summarize(geo,'QuantileLoss',opts).A.X.geomean,null);
   const all = Object.fromEntries(['INDPRO','CPIAUCSL','PCEPI','UNRATE'].map(t=>[t,data(`scores_${t}.json`)]));
   result = D.summarize(all,'MAE',opts);
   const generated = data('summary.json').avg_rank.MAE;
@@ -89,15 +101,15 @@ function environment(page, query = '') {
   const fc = environment('fc'); await fc.ui.init();
   assert.equal(fc.elements['fc-slider-label'].textContent,'2026-04-15');
   assert.equal(fc.elements['fc-next'].disabled,true);
-  assert.ok(fc.elements['fc-chart'].traces.some(t=>t.name==='BASELINE-ARMA_BIC'));
-  assert.equal(fc.elements['fc-status'].textContent.startsWith('Showing'),true);
+  assert.ok(fc.elements['fc-chart'].traces.some(t=>t.name==='ARMA_BIC'));
+  assert.equal(fc.elements['fc-status'].textContent,'');
   fc.elements['fc-year-from'].value=2026; fc.elements['fc-year-to'].value=2020; fc.ui.onRangeChange();
   assert.match(fc.elements['fc-status'].textContent,/valid years/); assert.equal(fc.elements['fc-play'].disabled,true);
   fc.elements['fc-year-from'].value=2027; fc.elements['fc-year-to'].value=2028; fc.ui.onRangeChange();
   assert.match(fc.elements['fc-status'].textContent,/No forecast origins/); fc.ui.stepSlider(1);
   const restored = environment('fc','?target=CPIAUCSL&from=2000&to=2001&origin=2000-01-17&models=MacroHub-Ensemble&horizon=2');
   await restored.ui.init();
-  const trace=restored.elements['fc-chart'].traces.find(t=>t.name==='MacroHub-Ensemble');
+  const trace=restored.elements['fc-chart'].traces.find(t=>t.name==='Ensemble');
   assert.equal(trace.y[0],0.0021); assert.equal(trace.customdata[0],'Median'); assert.equal(trace.y.length,2);
   assert.equal(restored.context.location.searchParams.get('origin'),'2000-01-17');
   const keyEvent={target:restored.elements['fc-reset-zoom'],key:' ',preventDefault(){throw Error('Button Space intercepted');}};
@@ -111,15 +123,26 @@ function environment(page, query = '') {
   assert.match(restored.elements['fc-status'].textContent,/Could not load/); assert.equal(restored.elements['fc-retry'].hidden,false);
 
   const ev=environment('eval'); ev.ui.init(); await tick();
-  assert.equal(ev.elements['eval-panel-summary'].hidden,false);
+  assert.equal(ev.elements['eval-sum-view'].value,'geomean');
+  assert.ok(!ev.elements['eval-chart']);
+  assert.match(ev.elements['eval-sum-table'].innerHTML, /data-sort="Overall"/);
+  assert.ok(!ev.elements['eval-sum-table'].innerHTML.includes('cells'));
+  assert.ok(!ev.elements['eval-sum-table'].innerHTML.includes('MacroHub'));
+  ev.elements['eval-sum-metric'].value='QuantileLoss'; await ev.ui.drawSummary();
+  assert.ok(!ev.elements['eval-sum-table'].innerHTML.includes('<td>—</td>'));
+  ev.elements['eval-sum-view'].value='rank'; await ev.ui.drawSummary();
+  assert.match(ev.elements['eval-sum-table'].innerHTML, /data-sort="Overall"/);
   assert.match(ev.elements['eval-sum-table'].innerHTML,/aria-sort="ascending"/);
   ev.elements['eval-sum-view'].value='score'; await ev.ui.drawSummary();
   assert.equal(ev.elements['eval-sum-table'].innerHTML.includes('data-sort="Overall"'),false);
-  ev.ui.switchTab('scores'); await tick();
-  for(let i=0;i<3;i++) ev.ui.drawChart();
-  assert.equal(ev.elements['eval-chart'].events.plotly_relayout.length,1);
-  ev.D.json=async()=>{throw Error('offline')}; await ev.ui.onTargetChange();
-  assert.equal(ev.elements['eval-chart'].traces.length,0); assert.equal(ev.elements['eval-cumulative-chart'].traces.length,0);
-  assert.equal(ev.elements['eval-retry'].hidden,false);
+  const history=environment('history'); history.ui.init(); await tick();
+  assert.ok(!history.elements['eval-sum-table']);
+  history.elements['eval-metric'].value='QuantileLoss';
+  for(let i=0;i<3;i++) history.ui.drawChart();
+  assert.ok(history.elements['eval-cumulative-chart'].traces.some(t => t.y.length));
+  assert.equal(history.elements['eval-chart'].events.plotly_relayout.length,1);
+  history.D.json=async()=>{throw Error('offline')}; await history.ui.onTargetChange();
+  assert.equal(history.elements['eval-chart'].traces.length,0); assert.equal(history.elements['eval-cumulative-chart'].traces.length,0);
+  assert.equal(history.elements['eval-retry'].hidden,false);
   console.log('Dashboard checks passed: point fallback, ranks/ties, RMSE, coverage, latest defaults, URL restoration, empty/invalid ranges, keyboard, request races, errors, and listener cleanup.');
 })();

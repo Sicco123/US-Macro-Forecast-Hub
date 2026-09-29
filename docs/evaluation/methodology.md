@@ -48,7 +48,7 @@ sample period).
 ## Beating the naive benchmark
 
 The downloadable score files include per-cell errors **relative to a naive
-benchmark** (`MacroHub-RandomWalk`); the dashboard displays absolute scores:
+benchmark** (`MacroHub-RandomWalk`):
 
 $$
 \text{Relative score} = \frac{\text{model score}}{\text{benchmark score}}
@@ -74,8 +74,10 @@ The benchmark is the appropriate naive rule for each space:
 Within each (target, target month, horizon, location, metric) cell, models are
 ranked by score (lower is better). Ties share the minimum rank: 1, 1, 3. The
 leaderboard averages these cell ranks over the selected origins and horizons.
-Overall rank averages target-level ranks; coverage is shown alongside each value.
-Absolute scores are reported separately by target because the units differ.
+Overall rank averages the four target-level ranks. A missing target leaves
+Overall unavailable. Models can have different coverage; the downloadable score
+files retain the scored records for checking comparable samples.
+Absolute scores are available separately by target because the units differ.
 RMSE is the square root of mean squared error across the selected scored cells.
 
 ---
@@ -83,9 +85,39 @@ RMSE is the square root of mean squared error across the selected scored cells.
 ## Prediction intervals
 
 Submissions include quantiles (0.05, 0.10, 0.50, 0.90, 0.95), displayed as
-80% and 90% bands in the forecast explorer. Density accuracy (quantile /
-pinball loss) is not yet part of the published leaderboard; MAE and RMSE are
-the headline metrics.
+80% and 90% bands in the forecast explorer. **Quantile loss** averages pinball loss equally across all five quantiles:
+
+$$
+L = \frac{1}{5} \sum_{\tau \in \{.05,.10,.50,.90,.95\}}
+\max(\tau(y-q_\tau), (\tau-1)(y-q_\tau)).
+$$
+
+All five quantiles must be present. Lower loss is better; rankings use the same
+cell and tie rules as MAE. This uses the standard
+[pinball loss definition](https://github.com/scikit-learn/scikit-learn/blob/main/doc/modules/model_evaluation.rst).
+
+## Geometric means
+
+The default leaderboard view is the **geometric mean of per-cell loss ratios**
+relative to RandomWalk. A value below 1 beats that benchmark. Ratios use the
+unrounded relative scores; cells with zero or missing benchmark loss are omitted.
+A zero model loss with a positive benchmark loss gives a zero geometric mean.
+RMSE takes the square root of the geometric mean squared-error ratio.
+
+Overall is the geometric mean of the four target-level geometric means, giving
+each indicator equal weight. It is unavailable if any target is missing.
+
+The period buttons exclude forecast **origins** during Covid (March 2020–June
+2021) or the GFC (December 2007–June 2009). Both periods are included by default.
+
+## Score history
+
+Evaluation shows monthly losses, a rolling average over up to 12 available
+origins, and cumulative losses. With all horizons selected, each origin averages
+its scored horizon records. RMSE takes the square root after averaging squared
+errors; its cumulative plot totals squared errors. Gaps and unequal model
+coverage affect rolling windows and cumulative totals. Drag a chart to zoom or
+use the From/To controls. Monthly values are available below the charts.
 
 ---
 

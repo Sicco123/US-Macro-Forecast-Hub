@@ -1,7 +1,11 @@
 # Indicator Overview
 
 The Macro Forecast Hub tracks 12 monthly U.S. macroeconomic indicators from
-the FRED-MD dataset. Three are required for all submissions; nine are optional.
+the FRED-MD dataset. Three are required for all submissions; nine are optional. The dashboards currently cover **INDPRO, CPIAUCSL, PCEPI, and UNRATE**.
+
+Data comes from [FRED-MD](https://research.stlouisfed.org/econ/mccracken/fred-databases/),
+maintained by the Federal Reserve Bank of St. Louis. See [Target Data](target-data.md)
+for downloads and [Methodology](../evaluation/methodology.md) for transformations.
 
 ---
 

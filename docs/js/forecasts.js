@@ -289,7 +289,7 @@
         const c = modelColorMap[m];
         const chk = selectedModels.has(m) ? "checked" : "";
         return `<label><input type="checkbox" value="${D.escape(m)}" ${chk}
-                 style="accent-color:${c}"> <span style="color:${c}; font-weight:600" aria-hidden="true">●</span> ${D.escape(m)}</label>`;
+                 style="accent-color:${c}"> <span style="color:${c}; font-weight:600" aria-hidden="true">●</span> ${D.escape(D.modelName(m))}</label>`;
       })
       .join("");
     modelBox.querySelectorAll("input").forEach((cb) => {
@@ -380,7 +380,7 @@
     if (!fcData || !window.Plotly || !validRange()) return;
     writeHash(); updateSliderLabel();
     if (!originDates.length) { clearCharts(); status.textContent = "No forecast origins in this range. Widen the dates or reset zoom."; return; }
-    status.textContent = selectedModels.size ? `Showing ${selectedModels.size} model(s) at origin ${originDates[sliderIndex]}.` : "Select a model to show its forecast.";
+    status.textContent = selectedModels.size ? "" : "Select a model to show its forecast.";
     yAxisRange = computeYRange();
     renderTable();
     if (selectedModels.size && !tableRows.length) status.textContent = "No forecasts for these models at this origin. Choose another origin or model.";
@@ -441,11 +441,11 @@
       const points = teds.map((_, i) => D.point(entry, i));
       const pointY = points.map((p) => p.value);
       traces.push({
-        x: teds, y: pointY, mode: "lines+markers", name: model,
+        x: teds, y: pointY, mode: "lines+markers", name: D.modelName(model),
         line: { color: color, width: 2.8, dash: D.dashes[Object.keys(fcData.models).sort().indexOf(model) % D.dashes.length] },
         marker: { size: 6, color: color },
         customdata: points.map((p) => p.statistic),
-        hovertemplate: "%{x|%b %Y}<br>%{customdata}: %{y:.6g}<extra>" + D.escape(model) + "</extra>",
+        hovertemplate: "%{x|%b %Y}<br>%{customdata}: %{y:.6g}<extra>" + D.escape(D.modelName(model)) + "</extra>",
       });
     });
 
@@ -547,9 +547,9 @@
       }
 
       traces.push({
-        x: filtDates, y: rolling, mode: "lines", name: model,
+        x: filtDates, y: rolling, mode: "lines", name: D.modelName(model),
         line: { color: color, width: 2.2, dash: D.dashes[Object.keys(fcData.models).sort().indexOf(model) % D.dashes.length] },
-        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.6g}<extra>" + model + "</extra>",
+        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.6g}<extra>" + D.escape(D.modelName(model)) + "</extra>",
       });
     });
 
@@ -619,10 +619,10 @@
       });
 
       traces.push({
-        x: filtDates, y: cumVals, mode: "lines", name: model,
+        x: filtDates, y: cumVals, mode: "lines", name: D.modelName(model),
         line: { color: color, width: 2.2, dash: D.dashes[Object.keys(fcData.models).sort().indexOf(model) % D.dashes.length] },
         fill: "tozeroy", fillcolor: hexToRgba(color, 0.08),
-        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.6g}<extra>" + model + "</extra>",
+        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.6g}<extra>" + D.escape(D.modelName(model)) + "</extra>",
       });
     });
 
@@ -661,7 +661,7 @@
     }
     download.disabled = !tableRows.length;
     if (!tableRows.length) { tableDiv.textContent = "No forecasts for the selected models and origin."; return; }
-    D.table(tableDiv, ["Model", "Target month", "Statistic", "Value", "5%", "10%", "Median", "90%", "95%"], tableRows.map((r) => r.map((v, i) => i < 3 ? v : D.format(v))), `${currentTarget} at origin ${originDates[sliderIndex]} — ${yAxisLabel(currentTarget)}`);
+    D.table(tableDiv, ["Model", "Target month", "Statistic", "Value", "5%", "10%", "Median", "90%", "95%"], tableRows.map((r) => r.map((v, i) => i === 0 ? D.modelName(v) : i < 3 ? v : D.format(v))), `${currentTarget} at origin ${originDates[sliderIndex]} — ${yAxisLabel(currentTarget)}`);
   }
 
   if (document.readyState === "loading") {

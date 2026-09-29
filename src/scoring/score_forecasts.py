@@ -4,6 +4,7 @@ Score all submitted forecasts against observed target data.
 Metrics computed:
   - MAE — absolute error of median (Q0.5) forecast
   - SqErr — squared error of mean forecast (sqrt of avg → RMSE)
+  - QuantileLoss — mean pinball loss across the five required quantiles
 
 Comparison space (forecasts and truth evaluated in same transformed scale):
   INDPRO, CPIAUCSL, PCEPI → Δlog(x)  monthly log difference
@@ -27,6 +28,13 @@ EVALUATION_DIR = HUB_ROOT / "model-evaluation"
 BASE_COLS = ["origin_date", "target", "target_end_date", "horizon",
              "location", "team_id", "model_id"]
 Q_LEVELS = [0.05, 0.1, 0.5, 0.9, 0.95]
+
+
+def quantile_loss(observed, predictions):
+    """Mean pinball loss; a missing required quantile leaves the score missing."""
+    error = np.asarray(observed)[:, None] - np.asarray(predictions)
+    levels = np.asarray(Q_LEVELS)
+    return np.mean(np.maximum(levels * error, (levels - 1) * error), axis=1)
 
 # Targets evaluated in log-diff or diff space
 LOG_DIFF_TARGETS = {"INDPRO", "CPIAUCSL", "PCEPI"}
@@ -110,6 +118,9 @@ def score_all() -> pd.DataFrame:
     # ── Build base DataFrame from pivot ────────────────────────────────────
     base = q_pivot[BASE_COLS].copy()
     base["MAE"] = np.round(mae, 6)
+    base["QuantileLoss"] = quantile_loss(
+        obs, q_pivot.reindex(columns=Q_LEVELS).to_numpy(dtype=float)
+    )
 
     # ── SqErr from mean forecast ───────────────────────────────────────────
     mean_fc = fc[fc["output_type"] == "mean"][
@@ -123,7 +134,7 @@ def score_all() -> pd.DataFrame:
     print(f"  Scored {len(base):,} forecast groups")
 
     # ── Melt to long format ────────────────────────────────────────────────
-    metric_cols = ["MAE", "SqErr"]
+    metric_cols = ["MAE", "SqErr", "QuantileLoss"]
     long = base.melt(
         id_vars=BASE_COLS,
         value_vars=metric_cols,
@@ -132,7 +143,7 @@ def score_all() -> pd.DataFrame:
     ).dropna(subset=["value_absolute"])
 
     # ── Relative scores (vs RandomWalk baseline) ──────────────────────────
-    ratio_metrics = {"MAE", "SqErr"}
+    ratio_metrics = set(metric_cols)
     merge_keys = ["target", "target_end_date", "horizon", "location", "metric"]
     bl = long[(long["team_id"] == "MacroHub") & (long["model_id"] == "RandomWalk")][
         merge_keys + ["value_absolute"]
@@ -143,7 +154,7 @@ def score_all() -> pd.DataFrame:
     bl_ok = long["_bl"].notna() & (long["_bl"] > 0)
     long["value_relative"] = np.where(
         is_ratio & bl_ok,
-        np.round(long["value_absolute"] / long["_bl"], 2),
+        long["value_absolute"] / long["_bl"],
         np.nan,
     )
     long.drop(columns=["_bl"], inplace=True)
