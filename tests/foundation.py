@@ -24,6 +24,10 @@ np.testing.assert_allclose(history.loc[history.unique_id == 'INDPRO', 'y'].iloc[
 future_changed = truth.copy()
 future_changed.loc[future_changed.truth_date >= origin, 'value'] = -1
 pd.testing.assert_frame_equal(prepare_history(future_changed, origin), history)
+# A missing final month must not shift horizon zero into the previous month.
+tail_gap = prepare_history(truth.loc[truth.truth_date != '2021-12-31'], origin)
+assert tail_gap.groupby('unique_id').ds.max().eq(pd.Timestamp('2021-12-31')).all()
+assert tail_gap.loc[tail_gap.ds == '2021-12-31', 'y'].eq(0).all()
 
 with tempfile.TemporaryDirectory() as tmp:
     os.environ['HUB_SKIP_WINDOW_CHECK'] = '1'

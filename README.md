@@ -25,9 +25,10 @@ The hub website is deployed automatically to GitHub Pages on every push to `main
 
 | Page | What you'll find |
 |------|------------------|
-| [Forecasts](https://sicco123.github.io/US-Macro-Forecast-Hub/forecasts/latest/) | Interactive explorer: browse any model's forecast at any origin date since 2000, with 80%/90% prediction bands. Auto-play through time (`Space`), step with arrow keys, click the chart to jump. |
-| [Leaderboard](https://sicco123.github.io/US-Macro-Forecast-Hub/evaluation/leaderboard/) | Model rankings by MAE/RMSE per target and horizon, rolling and cumulative error charts. |
-| [Participate](https://sicco123.github.io/US-Macro-Forecast-Hub/participate/how-to-submit/) | Step-by-step submission guide; the homepage shows a live registration-window countdown. |
+| [Leaderboard](https://sicco123.github.io/US-Macro-Forecast-Hub/) | Benchmark-relative geometric means and ranks for MAE, RMSE, and quantile loss. |
+| [Forecasts](https://sicco123.github.io/US-Macro-Forecast-Hub/forecasts/latest/) | Monthly forecast explorer with 80%/90% prediction bands and playback. |
+| [Evaluation](https://sicco123.github.io/US-Macro-Forecast-Hub/evaluation/history/) | Rolling and cumulative score histories. |
+| [Participate](https://sicco123.github.io/US-Macro-Forecast-Hub/participate/how-to-submit/) | Submission guide and registration schedule. |
 
 To preview locally:
 
@@ -206,6 +207,10 @@ Outputs use the existing `BASELINE-{model}` submission format. Re-run scoring
 and `src/generate_dashboard_data.py` to include them in the website. Historical
 runs use revised truth and may overlap model pretraining. Chronos and Toto
 submit quantiles only because the wrapper's point forecasts are medians.
+
+The repository includes 316 origins for each model: January 2000–March 2026
+monthly backfills and April 15, 2026. All three are included in the refreshed
+ensemble, scores, and dashboard data.
 
 Adapter checks without model downloads:
 

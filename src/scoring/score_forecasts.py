@@ -88,6 +88,10 @@ def score_all() -> pd.DataFrame:
         transformed = np.concatenate([[np.nan], np.diff(vals)])
         target_df.loc[mask, "observed"] = transformed
 
+    # A change across a missing month is not an observed one-month change.
+    consecutive = target_df.truth_date.dt.to_period("M").astype(int).groupby(target_df.target).diff().eq(1)
+    target_df.loc[target_df.target.isin(LOG_DIFF_TARGETS | DIFF_TARGETS) & ~consecutive, "observed"] = np.nan
+
     # Merge truth values (convert datetime back to string to match forecast format)
     truth = target_df.rename(columns={"truth_date": "target_end_date"}).copy()
     truth["target_end_date"] = truth["target_end_date"].dt.strftime("%Y-%m-%d")

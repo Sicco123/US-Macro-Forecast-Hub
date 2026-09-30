@@ -27,8 +27,10 @@ import numpy as np
 import pandas as pd
 try:
     from .arma_bic import generate_forecasts
+    from .baseline import monthly_levels
 except ImportError:  # Direct script execution.
     from arma_bic import generate_forecasts
+    from baseline import monthly_levels
 
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
@@ -46,10 +48,7 @@ QUANTILES = np.array([0.05, 0.1, 0.5, 0.9, 0.95])
 N_Q = len(QUANTILES)
 N_AHEAD = 24
 
-MAX_P = 6
-MAX_Q = 4
 MIN_HISTORY = 60
-MAX_HISTORY = 120  # 10-year rolling window
 
 ORIGIN_DATES = [
     pd.Timestamp(y, m, 17)
@@ -57,10 +56,6 @@ ORIGIN_DATES = [
     for m in range(1, 13)
     if pd.Timestamp(y, m, 17) <= pd.Timestamp("2026-03-17")
 ]
-
-# Pre-build grid once
-GRID = [(p, q) for p in range(MAX_P + 1) for q in range(MAX_Q + 1)
-        if not (p == 0 and q == 0)]
 
 COLUMNS = ["origin_date", "target", "target_end_date", "horizon",
            "location", "output_type", "output_type_id", "value"]
@@ -123,7 +118,9 @@ def generate_rw(series_dict, origin_str, targets):
         if len(vals) < 24:
             continue
 
-        last_date = pd.Timestamp(dts[-1])
+        levels = monthly_levels(pd.DataFrame({"truth_date": dts, "value": vals}), origin_str)
+        vals = levels.to_numpy(dtype=float)
+        last_date = levels.index[-1]
         teds = _target_end_dates(last_date)
 
         # Transform to comparison space for the four key targets
@@ -226,9 +223,7 @@ def generate_ensemble(origin_str):
              "location", "output_type", "output_type_id"]
 
     agg = combined.groupby(gcols).agg(
-        # 6 decimals: Δlog-space values are ~0.003 — rounding to 2 flattened
-        # the whole ensemble to 0.0 for CPI/INDPRO/PCEPI
-        value=("value", lambda x: round(float(x.astype(float).median()), 6)),
+        value=("value", "median"),
         n=("_model", "nunique"),
     ).reset_index()
     agg = agg[agg["n"] >= 2].drop(columns="n")

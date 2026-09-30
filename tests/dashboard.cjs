@@ -73,7 +73,8 @@ function environment(page, query = '') {
   assert.equal(D.modelName('MacroHub-TVNN-EW'),'TVNN-EW');
   assert.equal(D.modelName('BASELINE-ARMA_BIC'),'ARMA_BIC');
   const ensemble = data('forecasts_CPIAUCSL.json').models['MacroHub-Ensemble']['2000-01-17'];
-  assert.equal(D.point(ensemble,0).statistic,'Median'); assert.equal(D.point(ensemble,0).value,0.0021);
+  assert.equal(D.point(ensemble,0).statistic,'Median'); assert.equal(D.point(ensemble,0).value,ensemble.q050[0]);
+  assert.equal(D.point({q050:[0.0000002]},0).value,0.0000002);
   assert.equal(D.point({mean:[0],q050:[4]},0).value,0);
   assert.notEqual(D.format(0.0022),'0.00');
   assert.notEqual(D.format(0.0000002),'0');
@@ -117,7 +118,7 @@ function environment(page, query = '') {
   const restored = environment('fc','?target=CPIAUCSL&from=2000&to=2001&origin=2000-01-17&models=MacroHub-Ensemble&horizon=2');
   await restored.ui.init();
   const trace=restored.elements['fc-chart'].traces.find(t=>t.name==='Ensemble');
-  assert.equal(trace.y[0],0.0021); assert.equal(trace.customdata[0],'Median'); assert.equal(trace.y.length,2);
+  assert.equal(trace.y[0],ensemble.q050[0]); assert.equal(trace.customdata[0],'Median'); assert.equal(trace.y.length,2);
   assert.equal(restored.context.location.searchParams.get('origin'),'2000-01-17');
   assert.equal(restored.elements['fc-month-from'].value,'2000-01');
   assert.equal(restored.elements['fc-month-to'].value,'2001-12');

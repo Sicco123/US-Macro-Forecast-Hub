@@ -52,6 +52,24 @@ def load_target_data() -> pd.DataFrame:
     return df.sort_values(["target", "truth_date"])
 
 
+def monthly_levels(history, origin):
+    """Use only past levels; fill isolated calendar gaps, including the last month."""
+    history = history.copy()
+    history["truth_date"] = pd.to_datetime(history.truth_date)
+    history = history.loc[history.truth_date < pd.Timestamp(origin)].sort_values("truth_date")
+    dates = pd.DatetimeIndex(history.truth_date)
+    if dates.empty or dates.has_duplicates or not dates.is_month_end.all():
+        raise ValueError("History must contain unique month-end observations")
+    if not np.isfinite(history.value.to_numpy(dtype=float)).all():
+        raise ValueError("History contains invalid levels")
+    months = pd.date_range(dates.min(), pd.Timestamp(origin) - pd.offsets.MonthEnd(1), freq="ME")
+    # ponytail: fill one missing month; longer gaps need an explicit data policy.
+    levels = history.set_index("truth_date").value.reindex(months).ffill(limit=1)
+    if levels.isna().any():
+        raise ValueError("History contains a gap longer than one month")
+    return levels
+
+
 def compute_historical_errors(series: pd.Series, horizon: int) -> np.ndarray:
     """
     Compute historical random walk forecast errors at a given horizon.
@@ -104,8 +122,9 @@ def generate_baseline_forecast(target_df: pd.DataFrame, origin_date: str) -> lis
         if len(series_df) < MIN_HISTORY:
             continue
 
-        last_date = series_df["truth_date"].iloc[-1]
-        raw_values = series_df["value"].values.astype(float)
+        levels = monthly_levels(series_df, origin)
+        last_date = levels.index[-1]
+        raw_values = levels.to_numpy(dtype=float)
 
         # Transform to comparison space for the four key targets
         if target in LOG_DIFF_TARGETS:
@@ -156,7 +175,7 @@ def generate_baseline_forecast(target_df: pd.DataFrame, origin_date: str) -> lis
                     "location": "US",
                     "output_type": "quantile",
                     "output_type_id": q,
-                    "value": round(q_value, 4),
+                    "value": float(q_value),
                 })
 
             records.append({
@@ -167,7 +186,7 @@ def generate_baseline_forecast(target_df: pd.DataFrame, origin_date: str) -> lis
                 "location": "US",
                 "output_type": "mean",
                 "output_type_id": "",
-                "value": round(point_forecast, 4),
+                "value": float(point_forecast),
             })
 
     return records

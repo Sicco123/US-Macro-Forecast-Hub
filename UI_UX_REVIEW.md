@@ -83,3 +83,27 @@ foundation-model adapter/metadata checks pass. Real-browser visual inspection
 remains unverified: the browser tool stalled. FoundationForecast inference could
 not run because dependency installation exhausted available disk space; its
 temporary downloads were removed. No foundation-model results are claimed.
+
+### Leaderboard and benchmark corrections (September 2026)
+
+Leaderboard is now the landing page, followed by Forecasts and Evaluation.
+Model precedes Overall. Metric, Show, Horizon, From, and To share one row with
+44px choice controls; date bounds include months and preserve old year-only URLs.
+The desktop Safari preview confirms these alignments and compact table cells.
+Narrow-screen and screen-reader inspection remain pending.
+
+ARMA's historical forecasts were rounded too coarsely, and the latest file used
+levels where the scored indicators require changes. All 316 existing origins
+were rebuilt with standardized, converged, stationary state-space fits. The old
+unsupported fitting method and silent fallback were removed from all generators.
+Full precision is retained through ensemble aggregation, scoring, and JSON export;
+small positive geometric means no longer display as zero. Annual order selection
+and the latest-vintage limitation are documented in the ARMA metadata.
+
+Historical benchmark validation also exposed a missing October 2025 observation
+for CPIAUCSL and UNRATE. A shared monthly-level helper now handles isolated gaps
+at the end of the input window without moving horizon zero into the previous
+month. The affected ARMA and RandomWalk forecasts were regenerated. Scoring and
+truth charts exclude changes whose preceding observed month is missing, while
+training may use the documented one-month forward fill. Regression checks cover
+both cases.

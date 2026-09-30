@@ -30,7 +30,7 @@ html { scroll-padding-top: 6rem; }
   color: var(--md-default-fg-color);
   border-bottom: 1px solid var(--md-default-fg-color--lightest);
 }
-.md-tabs__list { display: flex; flex-wrap: nowrap; width: max-content; min-width: 100%; gap: 8px; padding: 6px 12px; }
+.md-tabs__list { display: flex; flex-wrap: nowrap; width: max-content; min-width: 100%; box-sizing: border-box; gap: 8px; padding: 6px 12px; }
 .md-tabs__item { flex: 0 0 auto; height: auto; padding: 0; }
 .md-tabs__link {
   display: flex;

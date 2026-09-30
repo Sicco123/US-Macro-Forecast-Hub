@@ -24,6 +24,11 @@ import pandas as pd
 from scipy import stats
 from statsmodels.tsa.arima.model import ARIMA
 
+try:
+    from .baseline import monthly_levels
+except ImportError:  # Direct script execution.
+    from baseline import monthly_levels
+
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
 TARGET_DATA_PATH = HUB_ROOT / "target-data" / "latest-target_values.csv"
@@ -124,17 +129,12 @@ def generate_forecasts(target_df: pd.DataFrame, origin_date: str, orders=None) -
         series_df["truth_date"] = pd.to_datetime(series_df["truth_date"])
         series_df = series_df.sort_values("truth_date")
         series_df = series_df[series_df["truth_date"] < origin]
-        if series_df.truth_date.duplicated().any():
-            raise ValueError(f"{target}: duplicate observation months")
-        series_df = series_df.set_index("truth_date").asfreq("ME")
-        series_df["value"] = series_df.value.ffill(limit=1)
-        series_df = series_df.reset_index()
-
         if len(series_df) < MIN_HISTORY:
             raise ValueError(f"{target}: only {len(series_df)} observations (need {MIN_HISTORY})")
 
-        values = series_df["value"].values.astype(float)
-        last_date = pd.Timestamp(series_df["truth_date"].iloc[-1])
+        levels = monthly_levels(series_df, origin)
+        values = levels.to_numpy(dtype=float)
+        last_date = levels.index[-1]
 
         take_log, _ = _tcode_params(TCODE[target])
         raw = values[-MAX_HISTORY:]
@@ -147,6 +147,7 @@ def generate_forecasts(target_df: pd.DataFrame, origin_date: str, orders=None) -
         # Pre-difference: ARMA(p,0,q) on first-differenced (log-)series
         window = np.diff(raw)
 
+        # ponytail: annual BIC selection for backfills; reselect monthly if needed.
         key = (target, origin.year)
         if orders is None or key not in orders:
             order = select_arma_order(window)

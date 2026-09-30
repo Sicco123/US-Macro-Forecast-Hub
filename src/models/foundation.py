@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .baseline import LOG_DIFF_TARGETS, REQUIRED_QUANTILES, TARGET_DATA_PATH
+from .baseline import LOG_DIFF_TARGETS, REQUIRED_QUANTILES, TARGET_DATA_PATH, monthly_levels
 from ..validation.validate_forecast import REQUIRED_COLUMNS
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
@@ -33,19 +33,10 @@ def prepare_history(truth, origin):
         history = history.loc[history.truth_date < pd.Timestamp(origin)].sort_values("truth_date")
         if len(history) < 25:
             raise ValueError(f"{target}: at least 25 monthly levels required before {origin}")
-        dates = pd.DatetimeIndex(history.truth_date)
-        if dates.has_duplicates or not dates.is_month_end.all():
-            raise ValueError(f"{target}: history must have unique month-end dates")
-        values = history.value.to_numpy(dtype=float)
-        if not np.isfinite(values).all() or (target in LOG_DIFF_TARGETS and (values <= 0).any()):
-            raise ValueError(f"{target}: invalid levels in input history")
-        # The hub has isolated missing months. Forward-fill levels using only
-        # pre-origin data; never compress two calendar months into one step.
-        # ponytail: one-month gaps only; longer gaps need an explicit data policy.
-        levels = history.set_index("truth_date").value.asfreq("ME").ffill(limit=1)
-        if levels.isna().any():
-            raise ValueError(f"{target}: history contains a gap longer than one month")
+        levels = monthly_levels(history, origin)
         dates, values = levels.index, levels.to_numpy(dtype=float)
+        if target in LOG_DIFF_TARGETS and (values <= 0).any():
+            raise ValueError(f"{target}: invalid levels in input history")
         changes = np.diff(np.log(values) if target in LOG_DIFF_TARGETS else values)
         frames.append(pd.DataFrame({"unique_id": target, "ds": dates[1:], "y": changes}).tail(CONTEXT))
     return pd.concat(frames, ignore_index=True)
@@ -91,6 +82,7 @@ def main():
     parser.add_argument("--target-data", type=Path, default=TARGET_DATA_PATH)
     parser.add_argument("--output-dir", type=Path, default=HUB_ROOT / "model-output")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--overwrite", action="store_true", help="Regenerate existing origins")
     args = parser.parse_args()
     if bool(args.start) != bool(args.end) or bool(args.origin) == bool(args.start):
         parser.error("choose --origin OR both --start and --end")
@@ -117,7 +109,7 @@ def main():
         try:
             for origin, history in histories.items():
                 path = args.output_dir / f"BASELINE-{name}" / f"{origin}-BASELINE-{name}.csv"
-                if path.exists():
+                if path.exists() and not args.overwrite:
                     print(f"Keeping existing {path}", flush=True)
                     continue
                 np.random.seed(args.seed)

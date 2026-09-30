@@ -77,7 +77,7 @@ def generate_ensemble(forecasts_df: pd.DataFrame) -> pd.DataFrame:
         ensemble_value = group_df["value"].astype(float).median()
 
         record = dict(zip(group_cols, group_key))
-        record["value"] = round(ensemble_value, 4)
+        record["value"] = float(ensemble_value)
         ensemble_records.append(record)
 
     return pd.DataFrame(ensemble_records)

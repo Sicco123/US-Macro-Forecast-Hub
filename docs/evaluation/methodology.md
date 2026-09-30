@@ -114,6 +114,10 @@ each indicator equal weight. It is unavailable if any target is missing.
 
 The period buttons exclude forecast **origins** during Covid (March 2020–June
 2021) or the GFC (December 2007–June 2009). Both periods are included by default.
+From and To include every origin in the selected boundary months. Losses retain
+full precision; only their display is formatted.
+When either month's observed level is missing, the one-month change is unavailable
+for scoring. Training-time gap fills are never treated as observed truth.
 
 ## Score history
 

@@ -18,8 +18,10 @@ import numpy as np
 import pandas as pd
 try:
     from .arma_bic import generate_forecasts
+    from .baseline import monthly_levels
 except ImportError:  # Direct script execution.
     from arma_bic import generate_forecasts
+    from baseline import monthly_levels
 
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
@@ -168,8 +170,9 @@ def run_backfill():
             if len(sdf) < MIN_HISTORY:
                 continue
 
-            values = sdf["value"].values.astype(float)
-            last_date = sdf["truth_date"].iloc[-1]
+            levels = monthly_levels(sdf, origin)
+            values = levels.to_numpy(dtype=float)
+            last_date = levels.index[-1]
 
             # Transform to comparison space (Δlog or Δ)
             if target in LOG_DIFF_TARGETS:

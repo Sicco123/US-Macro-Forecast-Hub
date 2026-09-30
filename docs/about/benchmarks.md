@@ -9,11 +9,15 @@ with these fixed model versions:
 | TimesFM | `google/timesfm-2.5-200m-pytorch` | Mean and five quantiles |
 | Toto | `Datadog/Toto-Open-Base-1.0` | Five quantiles from 128 samples |
 
+Included data covers 316 origins per model: monthly origins from January 2000
+through March 2026, plus April 15, 2026.
+
 Each model forecasts INDPRO, CPIAUCSL, PCEPI, and UNRATE for 24 months using
 up to 512 monthly changes before the origin. Models run without fine-tuning.
 The same transformations and scoring rules apply as for the other benchmarks.
-An isolated missing month is filled with the previous level before differencing;
-longer gaps stop the run. Only data before the origin is used for this fill.
+An isolated missing month, including the month immediately before the origin,
+is filled with the previous level before differencing; longer gaps stop the run.
+Only data before the origin is used for this fill.
 
 FoundationForecast 0.1.10 returns median point forecasts for Chronos-2 and Toto;
 these are not submitted as means, so their RMSE is unavailable. TimesFM's
@@ -41,7 +45,8 @@ To backfill monthly origins, or run just one model:
 .venv-foundation/bin/python -m src.models.foundation --models Chronos --start 2000-01-17 --end 2026-03-17
 ```
 
-Existing forecast files are kept so an interrupted run can resume. Invalid input,
+Existing forecast files are kept so an interrupted run can resume; use
+`--overwrite` to regenerate an origin after an input correction. Invalid input,
 missing forecast months, non-finite values, and crossing quantiles stop the run
 before that file is saved. No substitute model is used on failure.
 

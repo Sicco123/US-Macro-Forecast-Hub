@@ -48,6 +48,7 @@ def generate_truth():
     for tgt, sub in df.groupby("target"):
         sub = sub.sort_values("truth_date")
         values = sub["value"].values.astype(float)
+        consecutive = pd.to_datetime(sub.truth_date).dt.to_period("M").astype(int).diff().eq(1).to_numpy()
         entry = {
             "dates": sub["truth_date"].tolist(),
             "values": _json_values(values),
@@ -56,11 +57,11 @@ def generate_truth():
         # can plot the truth in the same space as the forecast values.
         if tgt in LOG_DIFF_TARGETS:
             transformed = np.concatenate([[np.nan], np.diff(np.log(values))])
-            entry["transformed_values"] = _json_values(transformed)
+            entry["transformed_values"] = _json_values(np.where(consecutive, transformed, np.nan))
             entry["transform"] = "log_diff"
         elif tgt in DIFF_TARGETS:
             transformed = np.concatenate([[np.nan], np.diff(values)])
-            entry["transformed_values"] = _json_values(transformed)
+            entry["transformed_values"] = _json_values(np.where(consecutive, transformed, np.nan))
             entry["transform"] = "diff"
         else:
             entry["transform"] = "level"

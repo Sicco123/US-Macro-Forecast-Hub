@@ -21,6 +21,9 @@ methods_long: >-
   level targets, the point forecast is the most recent observed value. Quantile forecasts are derived from the empirical
   distribution of past forecast errors at each horizon, using a rolling window
   of historical data. This provides a standard benchmark against which all
-  other submitted models are evaluated.
+  other submitted models are evaluated. Isolated missing monthly levels are
+  forward-filled before computing training changes; longer gaps stop generation.
+  Forecast month zero remains the origin month even when the previous observation
+  is missing. Scoring excludes unobservable changes rather than imputing truth.
 data_inputs: FRED-MD monthly dataset
 license: CC0-1.0
