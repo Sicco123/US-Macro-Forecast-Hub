@@ -20,7 +20,7 @@ is filled with the previous level before differencing; longer gaps stop the run.
 Only data before the origin is used for this fill.
 
 FoundationForecast 0.1.10 returns median point forecasts for Chronos-2 and Toto;
-these are not submitted as means, so their RMSE is unavailable. TimesFM's
+these are not submitted as means, so their RMSE uses the median fallback. TimesFM's
 requested 5th and 95th percentiles are clamped to its outer native quantile knots
 by the wrapper. This affects its interval coverage and quantile loss.
 

@@ -93,6 +93,7 @@ extra_javascript:
   - js/mathjax-config.js
   - js/forecasts.js
   - js/evaluation.js
+  - js/model.js
   - js/countdown.js
 
 extra_css:

@@ -2,7 +2,7 @@ team_name: Baseline Models
 team_abbr: BASELINE
 model_name: ARMA with BIC Lag Selection
 model_abbr: ARMA_BIC
-model_version: "1.1"
+model_version: "1.2"
 model_contributors:
   - name: Sicco Kooiker
     affiliation: SBE EDS - Machine Learning in Macroeconomics
@@ -21,6 +21,8 @@ methods_long: >-
   State-space maximum likelihood fits must converge and satisfy stationarity
   and invertibility. Historical backfills select orders annually and refit
   coefficients at each monthly origin, reselecting if a fit fails.
+  Training changes are capped at five robust standard deviations from their
+  median to keep one crisis observation from dominating later forecasts.
   Quantiles use the Gaussian predictive distribution and its horizon-specific
   forecast-error variance, transformed back to monthly change units without
   rounding or clipping. Isolated missing levels are forward-filled before

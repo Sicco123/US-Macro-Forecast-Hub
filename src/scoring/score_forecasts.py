@@ -3,7 +3,7 @@ Score all submitted forecasts against observed target data.
 
 Metrics computed:
   - MAE — absolute error of median (Q0.5) forecast
-  - SqErr — squared error of mean forecast (sqrt of avg → RMSE)
+  - SqErr — squared error of mean forecast, or median when no mean is submitted
   - QuantileLoss — mean pinball loss across the five required quantiles
 
 Comparison space (forecasts and truth evaluated in same transformed scale):
@@ -126,14 +126,15 @@ def score_all() -> pd.DataFrame:
         obs, q_pivot.reindex(columns=Q_LEVELS).to_numpy(dtype=float)
     )
 
-    # ── SqErr from mean forecast ───────────────────────────────────────────
+    # ── SqErr from mean forecast, with median fallback ────────────────────
     mean_fc = fc[fc["output_type"] == "mean"][
         BASE_COLS + ["value", "observed"]
     ].copy()
     mean_fc["value"] = mean_fc["value"].astype(float)
-    mean_fc["SqErr"] = (mean_fc["value"] - mean_fc["observed"]) ** 2
-
-    base = base.merge(mean_fc[BASE_COLS + ["SqErr"]], on=BASE_COLS, how="left")
+    base = base.merge(mean_fc[BASE_COLS + ["value"]], on=BASE_COLS, how="left")
+    median = q_pivot[0.5].to_numpy() if 0.5 in q_pivot else np.full(n, np.nan)
+    base["SqErr"] = (base["value"].fillna(pd.Series(median)) - obs) ** 2
+    base.drop(columns="value", inplace=True)
 
     print(f"  Scored {len(base):,} forecast groups")
 

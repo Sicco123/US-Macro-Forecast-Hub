@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 
 HUB_ROOT = Path(__file__).resolve().parents[1]
 TARGET_DATA = HUB_ROOT / "target-data" / "latest-target_values.csv"
@@ -152,6 +153,26 @@ def generate_forecasts():
         with open(out_path, "w") as f:
             json.dump(result, f, separators=(",", ":"))
         print(f"  forecasts_{tgt}.json ({len(origin_dates)} origins, {len(models)} models)")
+
+
+def generate_models():
+    """Publish basic model descriptions for leaderboard links."""
+    models = {}
+    for model_dir in sorted(MODEL_OUTPUT.iterdir()):
+        if not model_dir.is_dir() or not next(model_dir.glob("*.csv"), None):
+            continue
+        name = model_dir.name
+        metadata = HUB_ROOT / "model-metadata" / f"{name}.yml"
+        info = yaml.safe_load(metadata.read_text()) if metadata.exists() else {}
+        models[name] = {
+            "name": info.get("model_name", name.split("-", 1)[-1]),
+            "team": info.get("team_name", name.split("-", 1)[0]),
+            "version": info.get("model_version"),
+            "method": info.get("methods", "Method description coming soon."),
+            "inputs": info.get("data_inputs"),
+        }
+    (OUT_DIR / "models.json").write_text(json.dumps(models, separators=(",", ":")))
+    print(f"  models.json ({len(models)} models)")
 
 
 def generate_scores():
@@ -299,6 +320,7 @@ def main():
     print("Generating dashboard data...")
     generate_truth()
     generate_forecasts()
+    generate_models()
     generate_scores()
     generate_status()
     print("Done!")

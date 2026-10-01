@@ -32,12 +32,15 @@ $$
 \text{MAE} = \frac{1}{N} \sum_{i=1}^{N} |q_{0.5,i} - y_i|
 $$
 
-**Root Mean Squared Error** — evaluates the **mean** forecast, which minimizes
-expected squared loss, and penalizes large misses more heavily:
+**Root Mean Squared Error** — evaluates the **mean** forecast when submitted,
+otherwise the median (0.5 quantile). A mean forecast minimizes expected squared
+loss, and RMSE penalizes large misses more heavily:
 
 $$
-\text{RMSE} = \sqrt{\frac{1}{N} \sum_{i=1}^{N} (\hat{\mu}_i - y_i)^2}
+\text{RMSE} = \sqrt{\frac{1}{N} \sum_{i=1}^{N} (\hat{p}_i - y_i)^2}
 $$
+
+Here $\hat{p}_i$ is the submitted mean, or Q0.5 when no mean was submitted.
 
 Squared errors are stored per forecast; the square root is taken when
 aggregating, so RMSE can be computed over any subset (target, horizon,

@@ -382,7 +382,7 @@
       for (const m of models) {
         html += "<tr>";
         for (const t of columns) {
-          if (t === "Model") { html += `<th scope="row">${D.escape(D.modelName(m))}</th>`; continue; }
+          if (t === "Model") { html += `<th scope="row"><a href="models/?model=${encodeURIComponent(m)}">${D.escape(D.modelName(m))}</a></th>`; continue; }
           const v = value(m, t), winner = v !== null && v === best[t];
           html += `<td${winner ? ' class="best"' : ""}>${v === null ? "—" : view === "rank" ? v.toFixed(2) : D.format(v)}${winner ? '<span class="visually-hidden"> (best)</span>' : ""}</td>`;
         }

@@ -68,7 +68,7 @@ forecast combining the wisdom of all participants.
 - **Horizons:** 24 monthly steps, stored as `0` through `23`; the first step is the month after the latest observation available to the model
 - **Output:** 5 quantile levels (0.05, 0.1, 0.5, 0.9, 0.95) + optional mean
 - **Submission window:** 24 hours — the 17th of each month, 00:00–23:59 US/Eastern (enforced by CI)
-- **Evaluation metrics:** MAE (median forecast) and RMSE (mean forecast), absolute and relative to the naive benchmark
+- **Evaluation metrics:** MAE (median forecast) and RMSE (mean forecast, or median when no mean is submitted), absolute and relative to the naive benchmark
 
 ---
 

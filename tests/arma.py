@@ -15,6 +15,9 @@ small_point, small_std = forecast_arma(window * .00001 + .002, p, q, 24)
 np.testing.assert_allclose(small_point, point * .00001 + .002, rtol=1e-5)
 np.testing.assert_allclose(small_std, std * .00001, rtol=1e-5)
 assert np.isfinite(point).all() and (std >= 0).all()
+shock = rng.normal(0, .1, 120); shock[-1] = 10
+shock_point, shock_std = forecast_arma(shock, 0, 1, 1)
+assert abs(shock_point[0]) < 1 and shock_std[0] < 1
 assert _json_values([1e-12, None, np.nan]) == [1e-12, None, None]
 failed = SimpleNamespace(mle_retvals={'converged': False})
 with patch('src.models.arma_bic.ARIMA') as model:
@@ -31,4 +34,4 @@ with patch('src.models.arma_bic.ARIMA') as model:
         pass
     else:
         raise AssertionError('Failed grid silently substituted a model')
-print('ARMA checks passed: valid BIC fits, scale invariance, non-convergence rejection, and export precision.')
+print('ARMA checks passed: valid BIC fits, scale invariance, shock robustness, non-convergence rejection, and export precision.')

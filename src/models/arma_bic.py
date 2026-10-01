@@ -78,6 +78,11 @@ def fit_arma(window, p, q):
     window = np.asarray(window, dtype=float)
     if window.ndim != 1 or len(window) < 24 or not np.isfinite(window).all():
         raise ValueError("ARMA requires at least 24 finite monthly changes")
+    # A single crisis month must not drive years of monthly-change forecasts.
+    median = np.median(window)
+    mad = np.median(np.abs(window - median))
+    if mad:
+        window = np.clip(window, median - 5 * 1.4826 * mad, median + 5 * 1.4826 * mad)
     center, scale = window.mean(), window.std() or 1.0
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)

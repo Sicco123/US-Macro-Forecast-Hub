@@ -101,6 +101,7 @@ function environment(page, query = '') {
   geo.X.models.A.h0.QuantileLoss_benchmark_sum=[1,1,1];
   assert.equal(D.summarize(geo,'QuantileLoss',opts).A.X.geomean,null);
   const all = Object.fromEntries(['INDPRO','CPIAUCSL','PCEPI','UNRATE'].map(t=>[t,data(`scores_${t}.json`)]));
+  assert.deepEqual(Object.keys(data('models.json')).sort(), Object.keys(all.INDPRO.models).sort());
   result = D.summarize(all,'MAE',opts);
   const generated = data('summary.json').avg_rank.MAE;
   for (const [m,targets] of Object.entries(result)) for (const [t,v] of Object.entries(targets)) assert.equal(+v.rank.toFixed(2),generated[m][t]);
@@ -144,7 +145,15 @@ function environment(page, query = '') {
   assert.match(ev.elements['eval-sum-table'].innerHTML, /data-sort="Model"[\s\S]*data-sort="Overall"/);
   assert.match(ev.elements['eval-sum-table'].innerHTML, /data-sort="Overall"/);
   assert.ok(!ev.elements['eval-sum-table'].innerHTML.includes('cells'));
-  assert.ok(!ev.elements['eval-sum-table'].innerHTML.includes('MacroHub'));
+  assert.ok(!ev.elements['eval-sum-table'].innerHTML.includes('<th scope="row">MacroHub'));
+  assert.match(ev.elements['eval-sum-table'].innerHTML, /href="models\/\?model=BASELINE-ARMA_BIC"/);
+  const detail = {textContent:'', innerHTML:''};
+  vm.runInNewContext(read('docs/js/model.js'), {
+    document:{getElementById:()=>detail}, location:{search:'?model=BASELINE-ARMA_BIC'},
+    URLSearchParams, Dashboard:{json:async()=>data('models.json'), escape:D.escape},
+  });
+  await tick();
+  assert.match(detail.innerHTML, /ARMA with BIC Lag Selection/);
   ev.elements['eval-sum-metric'].value='QuantileLoss'; await ev.ui.drawSummary();
   assert.ok(!ev.elements['eval-sum-table'].innerHTML.includes('<td>—</td>'));
   ev.elements['eval-sum-view'].value='rank'; await ev.ui.drawSummary();
