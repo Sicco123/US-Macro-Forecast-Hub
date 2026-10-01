@@ -2,6 +2,8 @@
 import numpy as np
 import pandas as pd
 from unittest.mock import patch
+import tempfile
+from pathlib import Path
 from src.scoring.score_forecasts import quantile_loss, score_all, Q_LEVELS
 
 # Five asymmetric pinball losses: .1, .1, 0, .1, .1.
@@ -33,3 +35,22 @@ np.testing.assert_allclose(unrate.value_absolute, [(10 - .01) ** 2])
 indpro = scores[(scores.target == 'INDPRO') & (scores.metric == 'SqErr')]
 np.testing.assert_allclose(indpro.value_absolute, [(np.log(120/110) - .02) ** 2])
 print('Scoring checks passed: pinball loss, median RMSE fallback, and missing-month truth exclusion.')
+
+# Ensemble filenames must follow the forecast origin, including mixed-origin inputs.
+from src.models import ensemble
+forecasts = pd.DataFrame([dict(origin_date=origin, target='INDPRO',
+    target_end_date=origin[:7]+'-30', horizon=0, location='US', output_type='quantile',
+    output_type_id=.5, value=value, _team='TEST', _model=model)
+    for origin in ['2020-04-17', '2020-06-17']
+    for model, value in [('A', .01), ('B', .03)]])
+with tempfile.TemporaryDirectory() as tmp, \
+     patch.object(ensemble, 'ENSEMBLE_DIR', Path(tmp)), \
+     patch.object(ensemble, 'load_latest_forecasts', return_value=forecasts):
+    ensemble.main()
+    files = sorted(Path(tmp).glob('*.csv'))
+    assert [p.name for p in files] == ['2020-04-17-MacroHub-Ensemble.csv', '2020-06-17-MacroHub-Ensemble.csv']
+    for path in files:
+        output = pd.read_csv(path)
+        assert output.origin_date.eq(path.name[:10]).all()
+        np.testing.assert_allclose(output.value, .02)
+print('Ensemble checks passed: filenames match every forecast origin.')

@@ -8,17 +8,16 @@ model_contributors:
   affiliation: SBE EDS - Machine Learning in Macroeconomics
   email: macro-forecast-hub@example.org
 team_model_designation: hub_baseline
-methods: Zero-shot TimesFM forecasts via FoundationForecast, using monthly log changes
-  for INDPRO/CPIAUCSL/PCEPI and first differences for UNRATE.
-methods_long: Checkpoint google/timesfm-2.5-200m-pytorch; FoundationForecast 0.1.10.
-  No fine-tuning. Last 512 transformed monthly observations before each origin; 24
-  horizons, five required quantiles, seed 0. Its point output is submitted as the
-  mean. Requested tail quantiles outside the native knots are clamped by FoundationForecast.
-  Isolated missing level months are forward-filled before differencing. Historical forecasts use revised data and may overlap foundation-model pretraining;
-  they are retrospective benchmarks, not real-time out-of-sample claims.
-  The corrected runner forecasts the full FRED-MD panel independently per series
-  before target extraction. TimesFM 2.5 remains a univariate comparator. Existing
-  historical results have not yet been regenerated with that runner.
-data_inputs: FRED-MD monthly dataset (target indicators only)
+methods: Zero-shot independent-series TimesFM 2.5 forecasts of the full FRED-MD panel, followed by extraction
+  of INDPRO, CPIAUCSL, PCEPI, and UNRATE.
+methods_long: Checkpoint google/timesfm-2.5-200m-pytorch; FoundationForecast 0.1.10. No fine-tuning. All
+  126 FRED-MD variables are forecast independently; up to 512 transformed monthly observations before
+  each origin. Auxiliary variables use official FRED-MD transformation codes. Hub targets use monthly
+  log differences for INDPRO/CPIAUCSL/PCEPI and first differences for UNRATE. Forecast all variables for
+  24 months, then extract the four hub targets; mean and five quantiles, seed 0. Requested tail quantiles
+  outside the native knots are clamped by FoundationForecast. Native preprocessing interpolates missing
+  auxiliary values within the historical input window. Historical forecasts use revised observations and
+  may overlap model pretraining; they are retrospective comparisons.
+data_inputs: Full FRED-MD monthly panel (126 variables); four hub targets extracted after forecasting
 license: CC-BY-4.0
 website_url: https://github.com/TimeCopilot/foundationforecast

@@ -6,7 +6,6 @@ location, and quantile level, the ensemble value is the median across all
 contributing models.
 """
 
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -104,10 +103,10 @@ def main():
         return
 
     ENSEMBLE_DIR.mkdir(parents=True, exist_ok=True)
-    today = datetime.now().strftime("%Y-%m-%d")
-    output_path = ENSEMBLE_DIR / f"{today}-MacroHub-Ensemble.csv"
-    ensemble_df.to_csv(output_path, index=False)
-    print(f"Saved {len(ensemble_df)} ensemble rows to {output_path}")
+    for origin, forecasts in ensemble_df.groupby("origin_date"):
+        output_path = ENSEMBLE_DIR / f"{origin}-MacroHub-Ensemble.csv"
+        forecasts.to_csv(output_path, index=False)
+        print(f"Saved {len(forecasts)} ensemble rows to {output_path}")
 
 
 if __name__ == "__main__":

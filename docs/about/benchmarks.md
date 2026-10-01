@@ -27,12 +27,17 @@ Missing auxiliary observations remain masked for Chronos and Toto; TimesFM's
 native preprocessing interpolates them within the historical input window.
 Series with fewer than 25 available levels are reported and skipped.
 
-**Existing hub forecast files still use the original target-only setup.** Chronos
-and TimesFM ran independently on the four targets; Toto jointly forecast those
-four, without the other FRED-MD variables. The corrected full-panel runner has
-been validated at April 15, 2026, including checks that changing only PAYEMS
-changes INDPRO forecasts for Chronos and Toto. Historical hub files, scores,
-and dashboards have not been regenerated with the corrected setup.
+All 316 origins per model have been regenerated with the full 126-variable panel,
+replacing the original target-only results. The ensemble, scores, and dashboard
+data have been rebuilt from these forecasts. Full-panel files retain every
+variable; the hub submissions contain only the four evaluated targets.
+Changing only PAYEMS changes INDPRO forecasts for Chronos and Toto, confirming
+that the joint models use cross-variable information.
+
+Toto's 24-month horizon fits within its first output patch. Its predictive
+distribution is computed once, then 128 samples are drawn from it. This avoids
+repeating the same context computation while preserving the native distribution;
+a regression check compares the result with native inference, including masks.
 
 FoundationForecast 0.1.10 returns median point forecasts for Chronos-2 and Toto;
 these are not submitted as means, so their RMSE uses the median fallback. TimesFM's

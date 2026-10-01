@@ -215,10 +215,10 @@ an independent-series comparator. Full-panel forecasts are saved separately in
 `model-panel-output/`. Auxiliary series use the official transformation codes;
 the four hub targets keep their existing scoring transformations.
 
-The repository's existing target-only results include 316 origins per model: January 2000–March 2026
+The repository includes 316 full-panel origins per model: January 2000–March 2026
 monthly backfills and April 15, 2026. All three are included in the refreshed
-ensemble, scores, and dashboard data. These existing results have not been
-regenerated with the corrected full-panel runner.
+ensemble, scores, and dashboard data. These results replace the earlier
+target-only foundation-model forecasts.
 
 Adapter checks without model downloads:
 

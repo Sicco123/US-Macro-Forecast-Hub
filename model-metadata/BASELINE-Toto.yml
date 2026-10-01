@@ -8,17 +8,17 @@ model_contributors:
   affiliation: SBE EDS - Machine Learning in Macroeconomics
   email: macro-forecast-hub@example.org
 team_model_designation: hub_baseline
-methods: Zero-shot Toto forecasts via FoundationForecast, using monthly log changes
-  for INDPRO/CPIAUCSL/PCEPI and first differences for UNRATE.
-methods_long: Checkpoint Datadog/Toto-Open-Base-1.0; FoundationForecast 0.1.10. No
-  fine-tuning. Last 512 transformed monthly observations before each origin; 24 horizons,
-  five required quantiles, seed 0. The wrapper point output is a median; no mean rows
-  are submitted. Quantiles are estimated from 128 predictive samples. Historical forecasts
-  use revised data and may overlap foundation-model pretraining; they are retrospective
-  benchmarks, not real-time out-of-sample claims.
-  Existing hub results jointly forecast only the four targets. The corrected runner
-  uses one shared attention group for the full FRED-MD panel before target extraction;
-  existing historical results have not yet been regenerated with that runner.
-data_inputs: FRED-MD monthly dataset (target indicators only)
+methods: Zero-shot multivariate Toto forecasts of the full FRED-MD panel, followed by extraction of INDPRO,
+  CPIAUCSL, PCEPI, and UNRATE.
+methods_long: Checkpoint Datadog/Toto-Open-Base-1.0; FoundationForecast 0.1.10. No fine-tuning. All 126
+  FRED-MD variables share one attention group; up to 512 transformed monthly observations before each
+  origin. Auxiliary variables use official FRED-MD transformation codes. Hub targets use monthly log differences
+  for INDPRO/CPIAUCSL/PCEPI and first differences for UNRATE. Forecast all variables for 24 months, then
+  extract the four hub targets; five quantiles from 128 predictive samples, seed 0. The 24-month horizon
+  fits one output patch, so its predictive distribution is computed once and reused for all samples. No
+  mean rows are submitted. Isolated missing level months are forward-filled; other auxiliary missing values
+  are masked. Historical forecasts use revised observations and may overlap model pretraining; they are
+  retrospective comparisons.
+data_inputs: Full FRED-MD monthly panel (126 variables); four hub targets extracted after forecasting
 license: CC-BY-4.0
 website_url: https://github.com/TimeCopilot/foundationforecast

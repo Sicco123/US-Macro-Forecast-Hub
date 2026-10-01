@@ -99,18 +99,35 @@ def forecast_panel(model, history, name):
                 batch_size=len(panel.columns), context_length=CONTEXT)
             predictions = quantiles[0].cpu().numpy()
         else:
-            from toto.data.util.dataset import MaskedTimeseries
+            from toto.data.util.dataset import MaskedTimeseries, pad_array, replace_extreme_values
             values = values.to(model.device)
             inputs = MaskedTimeseries(
                 series=values.nan_to_num(), padding_mask=torch.isfinite(values),
                 id_mask=torch.zeros_like(values, dtype=torch.long),
                 timestamp_seconds=torch.zeros_like(values),
                 time_interval_seconds=torch.ones(len(values), device=model.device))
-            result = native.forecast(inputs, prediction_length=HORIZONS,
-                                     num_samples=model.num_samples,
-                                     samples_per_batch=model.samples_per_batch, use_kv_cache=True)
             qs = torch.tensor(REQUIRED_QUANTILES, device=model.device)
-            predictions = result.quantile(qs)[:, 0].permute(1, 2, 0).cpu().numpy()
+            stride = native.model.patch_embed.stride
+            if HORIZONS <= stride:
+                # All samples share the same context within the first output patch.
+                # Reuse its distribution instead of repeating the backbone 128 times.
+                with torch.no_grad():
+                    series = pad_array(inputs.series.unsqueeze(0), stride)
+                    mask = pad_array(inputs.padding_mask.unsqueeze(0), stride)
+                    ids = torch.zeros_like(series, dtype=torch.long)
+                    embeddings, loc, scale = native.model.backbone(
+                        series, mask, ids, scaling_prefix_length=series.shape[-1])
+                    future = slice(-stride, -stride + HORIZONS if HORIZONS < stride else None)
+                    base = native.model.output_distribution(embeddings[:, :, future, :])
+                    distribution = native.create_affine_transformed(base, loc[:, :, future], scale[:, :, future])
+                    samples = replace_extreme_values(distribution.sample((model.num_samples,)))
+                    quantiles = torch.quantile(samples, qs, dim=0)
+            else:
+                result = native.forecast(inputs, prediction_length=HORIZONS,
+                                         num_samples=model.num_samples,
+                                         samples_per_batch=model.samples_per_batch, use_kv_cache=True)
+                quantiles = result.quantile(qs)
+            predictions = quantiles[:, 0].permute(1, 2, 0).cpu().numpy()
     months = pd.date_range(panel.index[-1] + pd.offsets.MonthEnd(1), periods=HORIZONS, freq="ME")
     return pd.DataFrame({
         "unique_id": np.repeat(panel.columns, HORIZONS), "ds": np.tile(months, len(panel.columns)),
@@ -182,6 +199,8 @@ def main():
         kwargs = {"repo_id": CHECKPOINTS[name], "alias": name, "batch_size": 4}
         if name != "Chronos":
             kwargs["context_length"] = CONTEXT
+        if name == "TimesFM":
+            kwargs.update(batch_size=16, per_core_batch_size=16)
         model = classes[name](**kwargs)
         try:
             for origin, history in histories.items():
@@ -198,7 +217,7 @@ def main():
                 output = hub_rows(forecasts, history, origin, name)
                 panel_path.parent.mkdir(parents=True, exist_ok=True)
                 temporary = panel_path.with_suffix(".csv.tmp")
-                forecasts.to_csv(temporary, index=False)
+                forecasts.to_csv(temporary, index=False, float_format="%.17g")
                 temporary.replace(panel_path)
                 path.parent.mkdir(parents=True, exist_ok=True)
                 temporary = path.with_suffix(".csv.tmp")
