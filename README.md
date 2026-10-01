@@ -198,6 +198,7 @@ Chronos-2, TimesFM 2.5, and Toto 1.0 use the optional
 `requirements-foundation.txt` in a separate Python 3.11 environment, then run:
 
 ```bash
+python target-data/fetch_fred_md.py --panel-only
 python -m src.models.foundation --origin 2026-04-15
 # Or resume monthly historical forecasts for selected models:
 python -m src.models.foundation --models Chronos TimesFM Toto --start 2000-01-17 --end 2026-03-17
@@ -208,14 +209,22 @@ and `src/generate_dashboard_data.py` to include them in the website. Historical
 runs use revised truth and may overlap model pretraining. Chronos and Toto
 submit quantiles only because the wrapper's point forecasts are medians.
 
-The repository includes 316 origins for each model: January 2000–March 2026
+The corrected runner forecasts the full FRED-MD panel before selecting the four
+hub targets. Chronos-2 and Toto run jointly across variables; TimesFM 2.5 remains
+an independent-series comparator. Full-panel forecasts are saved separately in
+`model-panel-output/`. Auxiliary series use the official transformation codes;
+the four hub targets keep their existing scoring transformations.
+
+The repository's existing target-only results include 316 origins per model: January 2000–March 2026
 monthly backfills and April 15, 2026. All three are included in the refreshed
-ensemble, scores, and dashboard data.
+ensemble, scores, and dashboard data. These existing results have not been
+regenerated with the corrected full-panel runner.
 
 Adapter checks without model downloads:
 
 ```bash
 PYTHONPATH=. python tests/foundation.py
+PYTHONPATH=. .venv-foundation/bin/python tests/panel_inference.py
 PYTHONPATH=. python tests/scoring.py
 node tests/dashboard.cjs
 ```

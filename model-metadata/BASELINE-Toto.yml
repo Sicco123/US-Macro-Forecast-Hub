@@ -16,6 +16,9 @@ methods_long: Checkpoint Datadog/Toto-Open-Base-1.0; FoundationForecast 0.1.10. 
   are submitted. Quantiles are estimated from 128 predictive samples. Historical forecasts
   use revised data and may overlap foundation-model pretraining; they are retrospective
   benchmarks, not real-time out-of-sample claims.
+  Existing hub results jointly forecast only the four targets. The corrected runner
+  uses one shared attention group for the full FRED-MD panel before target extraction;
+  existing historical results have not yet been regenerated with that runner.
 data_inputs: FRED-MD monthly dataset (target indicators only)
 license: CC-BY-4.0
 website_url: https://github.com/TimeCopilot/foundationforecast

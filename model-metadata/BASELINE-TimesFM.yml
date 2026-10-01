@@ -16,6 +16,9 @@ methods_long: Checkpoint google/timesfm-2.5-200m-pytorch; FoundationForecast 0.1
   mean. Requested tail quantiles outside the native knots are clamped by FoundationForecast.
   Isolated missing level months are forward-filled before differencing. Historical forecasts use revised data and may overlap foundation-model pretraining;
   they are retrospective benchmarks, not real-time out-of-sample claims.
+  The corrected runner forecasts the full FRED-MD panel independently per series
+  before target extraction. TimesFM 2.5 remains a univariate comparator. Existing
+  historical results have not yet been regenerated with that runner.
 data_inputs: FRED-MD monthly dataset (target indicators only)
 license: CC-BY-4.0
 website_url: https://github.com/TimeCopilot/foundationforecast

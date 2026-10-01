@@ -19,16 +19,13 @@ Reference:
 import argparse
 import csv
 import os
+import re
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urljoin
+from urllib.request import urlopen
 
 import pandas as pd
-from dotenv import load_dotenv
-from fredapi import Fred
-
-# Load .env from project root (two levels up from this script)
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-
 # Target indicators tracked by the Macro Forecast Hub
 TARGET_INDICATORS = [
     "INDPRO",
@@ -63,6 +60,28 @@ TRANSFORM_CODES = {
 }
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+FRED_MD_PAGE = "https://www.stlouisfed.org/research/economists/mccracken/fred-databases"
+
+
+def fetch_fred_panel(output_dir: Path):
+    """Download the full current vintage, with the original transformation row."""
+    # The old static current.csv URL can serve a stale vintage; follow the published link.
+    with urlopen(FRED_MD_PAGE, timeout=60) as response:
+        page = response.read().decode("utf-8")
+    match = re.search(r'<a\s+href="([^"]*/fred-md/monthly/[^"]+\.csv)"[^>]*>current\.csv</a>', page)
+    if match is None:
+        raise ValueError("Could not find the current monthly FRED-MD download")
+    url = urljoin(FRED_MD_PAGE, match[1])
+    with urlopen(url, timeout=60) as response:
+        data = response.read()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "latest-fred-md.csv"
+    temporary = path.with_suffix(".csv.tmp")
+    temporary.write_bytes(data)
+    from src.models.foundation import load_fred_panel
+    truth, codes = load_fred_panel(temporary)
+    temporary.replace(path)
+    print(f"Saved full FRED-MD panel: {len(codes)} variables through {truth.truth_date.max():%Y-%m} ({url})")
 
 
 def load_existing(output_dir: Path) -> pd.DataFrame:
@@ -87,7 +106,7 @@ def get_latest_dates(existing_df: pd.DataFrame) -> dict[str, str]:
 
 
 def fetch_new_observations(
-    fred: Fred, indicators: list[str], latest_dates: dict[str, str]
+    fred, indicators: list[str], latest_dates: dict[str, str]
 ) -> pd.DataFrame:
     """Query FRED API only for observations after what we already have."""
     records = []
@@ -209,7 +228,20 @@ def main():
         action="store_true",
         help="Force full re-download (ignore existing data)",
     )
+    parser.add_argument("--panel-only", action="store_true", help="Download the full FRED-MD panel without the FRED API")
     args = parser.parse_args()
+
+    # Make imports from the hub available when this file is executed directly.
+    import sys
+    sys.path.insert(0, str(SCRIPT_DIR.parent))
+    output_dir = Path(args.output_dir)
+    fetch_fred_panel(output_dir)
+    if args.panel_only:
+        return
+
+    from dotenv import load_dotenv
+    from fredapi import Fred
+    load_dotenv(SCRIPT_DIR.parent / ".env")
 
     api_key = args.api_key or os.environ.get("FRED_API_KEY")
     if not api_key:
@@ -223,7 +255,6 @@ def main():
         raise SystemExit(1)
 
     fred = Fred(api_key=api_key)
-    output_dir = Path(args.output_dir)
 
     # Load existing data
     if args.full:

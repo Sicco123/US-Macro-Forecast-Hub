@@ -15,6 +15,9 @@ methods_long: Checkpoint amazon/chronos-2; FoundationForecast 0.1.10. No fine-tu
   required quantiles, seed 0. Its point output is a median; no mean rows are submitted.
   Isolated missing level months are forward-filled before differencing. Historical forecasts use revised data and may overlap foundation-model pretraining;
   they are retrospective benchmarks, not real-time out-of-sample claims.
+  Existing hub results used independent forecasts of the four targets. The corrected
+  runner jointly forecasts the full FRED-MD panel before extracting those targets;
+  existing historical results have not yet been regenerated with that runner.
 data_inputs: FRED-MD monthly dataset (target indicators only)
 license: CC-BY-4.0
 website_url: https://github.com/TimeCopilot/foundationforecast

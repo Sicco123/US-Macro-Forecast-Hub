@@ -19,6 +19,7 @@ St. Louis. It contains 100+ monthly U.S. macroeconomic time series.
 | File | Description |
 |------|-------------|
 | `latest-target_values.csv` | Most recent complete dataset |
+| `latest-fred-md.csv` | Official full FRED-MD panel, including its transformation-code row; foundation-model input |
 | `snapshots/YYYY-MM-DD-target_values.csv` | Historical snapshots (captures data revisions) |
 | `transform_codes.csv` | FRED-MD transformation codes for each series |
 | `fetch_fred_md.py` | Script to download and process FRED-MD data |
@@ -43,3 +44,11 @@ python fetch_fred_md.py
 This will download the latest FRED-MD vintage and save both a `latest-*` file
 and a dated snapshot. Snapshots are important because FRED-MD data undergoes
 revisions — earlier vintages may differ from current values.
+
+The target-level observations are queried through the FRED API. The same script
+also downloads the full official FRED-MD panel for foundation-model inputs.
+Download only that panel without an API key:
+
+```bash
+python target-data/fetch_fred_md.py --panel-only
+```
