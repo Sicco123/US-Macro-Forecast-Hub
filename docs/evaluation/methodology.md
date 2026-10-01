@@ -131,6 +131,16 @@ errors; its cumulative plot totals squared errors. Gaps and unequal model
 coverage affect rolling windows and cumulative totals. Drag a chart to zoom or
 use the From/To controls. Monthly values are available below the charts.
 
+The additional RW-relative plot divides cumulative model loss by cumulative
+RandomWalk loss, using only paired forecast cases. It shows absolute loss for
+MAE and squared loss for RMSE, without taking a square root. With all horizons
+selected, it pools paired loss sums across horizons. Totals restart at the
+selected From month: 1 equals RW and 0.8 means 20% less cumulative loss.
+The ratio is unavailable until cumulative RW loss is positive. Origins with
+no new paired losses leave the running totals unchanged. Each model uses its
+own matching cases, so differing coverage still matters. The reference at 1
+remains available when RW is deselected. Ratios are also available in a table.
+
 ---
 
 ## Evaluation schedule

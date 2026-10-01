@@ -62,6 +62,10 @@ hide:
   <button id="fc-reset-zoom" class="dash-btn" title="Reset zoom to full range">&#x21ba; Reset Zoom</button>
 </div>
 
+<div class="dash-models">
+  <button id="fc-models-show" type="button" class="dash-btn" aria-controls="fc-models" disabled>Show all models</button>
+  <button id="fc-models-hide" type="button" class="dash-btn" aria-controls="fc-models" disabled>Hide all models</button>
+</div>
 <div class="dash-models" id="fc-models">Loading models...</div>
 
 <div class="dash-slider-row">
@@ -86,6 +90,9 @@ hide:
   <div class="dash-chart" id="fc-score-chart" role="region" aria-label="Rolling forecast error"></div>
   <div class="dash-chart" id="fc-cumulative-chart" role="region" aria-label="Cumulative forecast error"></div>
   </div>
+  <p class="dash-note" id="fc-relative-note">Cumulative model loss / cumulative RW loss on matching forecast cases at the selected horizon. 1 = RW; below 1 = less error. Totals restart at From. Squared errors are not square-rooted. Ratios are unavailable while cumulative RW loss is zero.</p>
+  <div class="dash-chart" id="fc-relative-chart" role="region" aria-label="Cumulative forecast error relative to RW" aria-describedby="fc-relative-note"></div>
+  <details><summary>View cumulative ratios to RW</summary><div id="fc-relative-table" class="dash-table-scroll" role="region" aria-label="Cumulative ratios to RW" tabindex="0"></div></details>
 </details>
 
 </div>

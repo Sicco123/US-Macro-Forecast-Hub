@@ -41,9 +41,13 @@
   const monthFrom = ROOT.querySelector("#eval-month-from");
   const monthTo = ROOT.querySelector("#eval-month-to");
   const modelBox = ROOT.querySelector("#eval-models");
+  const btnShowModels = ROOT.querySelector("#eval-models-show");
+  const btnHideModels = ROOT.querySelector("#eval-models-hide");
   const chartDiv = ROOT.querySelector("#eval-chart");
   const btnResetZoom = ROOT.querySelector("#eval-reset-zoom");
   const cumChartDiv = ROOT.querySelector("#eval-cumulative-chart");
+  const relativeChartDiv = ROOT.querySelector("#eval-relative-chart");
+  const relativeTable = ROOT.querySelector("#eval-relative-table");
 
   const selSumMetric = ROOT.querySelector("#eval-sum-metric");
   const selSumView = ROOT.querySelector("#eval-sum-view");
@@ -67,7 +71,8 @@
     summarySort = ["Model", "Overall", "INDPRO", "CPIAUCSL", "PCEPI", "UNRATE"].includes(params.get("sort")) ? params.get("sort") : "Overall";
   }
   function clearCharts() {
-    if (window.Plotly) [chartDiv, cumChartDiv].forEach((d) => Plotly.purge(d));
+    relativeTable.replaceChildren();
+    if (window.Plotly) [chartDiv, cumChartDiv, relativeChartDiv].forEach((d) => Plotly.purge(d));
     ROOT.querySelector("#eval-data-table").replaceChildren();
     ROOT.querySelector("#eval-description").textContent = "";
   }
@@ -78,6 +83,16 @@
 
   function init() {
     if (activeTab === "scores") {
+      [[btnShowModels, true], [btnHideModels, false]].forEach(([button, checked]) => {
+        button.addEventListener("click", () => {
+          selectedModels.clear();
+          modelBox.querySelectorAll("input").forEach((cb) => {
+            cb.checked = checked;
+            if (checked) selectedModels.add(cb.value);
+          });
+          drawChart();
+        });
+      });
       selTarget.addEventListener("change", onTargetChange);
       [selMetric, selHorizon, monthFrom, monthTo].forEach((el) => el.addEventListener("change", drawChart));
       btnResetZoom.addEventListener("click", () => { monthFrom.value = minMonth; monthTo.value = maxMonth; drawChart(); });
@@ -100,6 +115,7 @@
     const id = ++scoreRequest, target = selTarget.value;
     if (currentTarget && savedModels === null) savedModels = [...selectedModels];
     currentTarget = null; clearCharts(); modelBox.replaceChildren();
+    [btnShowModels, btnHideModels].forEach((el) => { el.disabled = true; });
     status.textContent = "Loading score history…"; retry.hidden = true; panelScores.setAttribute("aria-busy", "true");
     try {
       const [data] = await Promise.all([loadScores(target), D.plotly()]);
@@ -116,7 +132,12 @@
     } catch {
       if (id !== scoreRequest || activeTab !== "scores") return;
       clearCharts(); status.textContent = "Could not load score history. Check your connection and retry."; retry.hidden = false;
-    } finally { if (id === scoreRequest) panelScores.setAttribute("aria-busy", "false"); }
+    } finally {
+      if (id === scoreRequest) {
+        panelScores.setAttribute("aria-busy", "false");
+        [btnShowModels, btnHideModels].forEach((el) => { el.disabled = !modelBox.querySelectorAll("input").length; });
+      }
+    }
   }
 
   function buildModelCheckboxes(data) {
@@ -266,9 +287,20 @@
 
   // Cumulative losses use squared error for RMSE.
   function drawCumulativeChart() {
+    renderCumulativeChart(false);
+    renderCumulativeChart(true);
+  }
+
+  function renderCumulativeChart(relative) {
+    const plotDiv = relative ? relativeChartDiv : cumChartDiv;
     const metricKey = selMetric.value;
+    if (relative) {
+      relativeTable.replaceChildren();
+      ROOT.querySelector("#eval-relative").hidden = metricKey !== "MAE" && metricKey !== "SqErr";
+      if (metricKey !== "MAE" && metricKey !== "SqErr") { Plotly.purge(plotDiv); return; }
+    }
     const data = scoresCache[currentTarget];
-    if (!data) { Plotly.purge(cumChartDiv); return; }
+    if (!data) { Plotly.purge(plotDiv); return; }
 
     const isRMSE = metricKey === "SqErr";
     const displayName = isRMSE ? "Squared error" : metricKey === "QuantileLoss" ? "Quantile loss" : "Absolute error";
@@ -281,9 +313,20 @@
 
     const models = Object.keys(data.models).sort().filter((m) => selectedModels.has(m));
     const traces = [];
+    const ratioRows = [];
 
     models.forEach((model) => {
       const color = modelColorMap[model];
+      if (relative) {
+        const series = D.relativeCumulative(data, model, metricKey, horizon, fromMonth, toMonth);
+        traces.push({
+          ...series, mode: "lines", name: D.modelName(model),
+          line: { color, width: 2.2, dash: D.dashes[Object.keys(data.models).sort().indexOf(model) % D.dashes.length] },
+          hovertemplate: "%{x|%b %Y}<br>Model / RW: %{y:.6g}<extra>" + D.escape(D.modelName(model)) + "</extra>",
+        });
+        series.x.forEach((date, i) => ratioRows.push([D.modelName(model), date, D.format(series.y[i])]));
+        return;
+      }
       const ms = data.models[model];
       const hKeys = horizon === "all" ? Object.keys(ms) : [`h${horizon}`];
 
@@ -322,13 +365,13 @@
     const dark = isDark();
     const layout = {
       font: plotlyFont(),
-      title: { text: `Cumulative ${displayName.toLowerCase()}`, font: { size: 14, color: dark ? "#ccc" : "#555" }, x: 0.01 },
+      title: { text: relative ? `Cumulative ${isRMSE ? "squared" : "absolute"} error / RW` : `Cumulative ${displayName.toLowerCase()}`, font: { size: 14, color: dark ? "#ccc" : "#555" }, x: 0.01 },
       xaxis: {
         range: [`${fromMonth}-01`, D.nextMonth(toMonth)],
         ...plotlyGrid(), tickformat: "%Y",
         spikecolor: dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)", spikethickness: 1,
       },
-      yaxis: { title: { text: displayName, standoff: 10 }, ...plotlyGrid() },
+      yaxis: { title: { text: relative ? "Model / RW (1 = RW)" : displayName, standoff: 10 }, ...plotlyGrid() },
       legend: { orientation: "h", y: -0.18, x: 0.5, xanchor: "center",
                 font: { size: 12 }, bgcolor: "rgba(0,0,0,0)" },
       margin: { t: 36, r: 16, b: 70, l: chartDiv.clientWidth < 500 ? 48 : 75 },
@@ -337,9 +380,18 @@
       plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
     };
 
-    Plotly.react(cumChartDiv, traces, layout, PLOTLY_CONFIG);
-    cumChartDiv.removeAllListeners && cumChartDiv.removeAllListeners("plotly_relayout");
-    cumChartDiv.on("plotly_relayout", syncMonthsFromPlotly);
+    if (relative) {
+      layout.shapes = [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 1, y1: 1,
+        line: { color: plotlyFont().color, width: 1.5, dash: "dash" } }];
+      layout.annotations = traces.some((t) => t.y.some(Number.isFinite)) ? [] : [{
+        xref: "paper", yref: "paper", x: 0.5, y: 0.5, showarrow: false,
+        text: selectedModels.size ? "No paired losses with<br>positive RW total in this range." : "Select a model to compare with RW.",
+      }];
+      D.table(relativeTable, ["Model", "Origin", "Model / RW"], ratioRows, `Cumulative ${isRMSE ? "squared" : "absolute"} error / RW`);
+    }
+    Plotly.react(plotDiv, traces, layout, PLOTLY_CONFIG);
+    plotDiv.removeAllListeners && plotDiv.removeAllListeners("plotly_relayout");
+    plotDiv.on("plotly_relayout", syncMonthsFromPlotly);
   }
 
   const SUMMARY_TARGETS = ["INDPRO", "CPIAUCSL", "PCEPI", "UNRATE"];

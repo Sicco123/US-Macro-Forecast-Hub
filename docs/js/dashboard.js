@@ -91,6 +91,26 @@
       link.href = URL.createObjectURL(blob); link.download = name;
       link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     },
+    // Use pre-paired loss sums so both totals contain the same forecast cases.
+    relativeCumulative(data, model, metric, horizon, fromMonth, toMonth) {
+      const scores = data.models[model] || {};
+      const hKeys = horizon === "all" ? Object.keys(scores) : [`h${horizon}`];
+      const x = [], y = [];
+      let total = 0, benchmark = 0;
+      data.origin_dates.forEach((date, i) => {
+        const month = date.slice(0, 7);
+        if (month < fromMonth || month > toMonth) return;
+        for (const h of hKeys) {
+          const s = scores[h]?.[`${metric}_paired_sum`]?.[i];
+          const b = scores[h]?.[`${metric}_benchmark_sum`]?.[i];
+          if (Number.isFinite(s) && s >= 0 && Number.isFinite(b) && b >= 0) {
+            total += s; benchmark += b;
+          }
+        }
+        x.push(date); y.push(benchmark > 0 ? total / benchmark : null);
+      });
+      return { x, y };
+    },
     // Rank each origin/horizon cell before averaging. Equal values share the minimum rank.
     summarize(data, metric, { horizon, fromMonth, toMonth, includeCovid, includeGfc = true }) {
       const result = {};
