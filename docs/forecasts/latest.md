@@ -75,10 +75,11 @@ hide:
   <button id="fc-next" aria-label="Next origin date" disabled>&rarr;</button>
   <span class="slider-date" id="fc-slider-label">&mdash;</span>
 </div>
+<p class="dash-note">The slider shows dates with forecasts from the selected models.</p>
 
 <p id="fc-description" class="visually-hidden"></p>
-<p class="dash-note">Shading: 80% and 90% prediction intervals. <a href="../../evaluation/methodology/">Methodology</a></p>
-<div class="dash-chart" id="fc-chart" role="region" aria-label="Forecast chart" aria-describedby="fc-description"></div>
+<p class="dash-note" id="fc-chart-note">Forecast bands show 80% and 90% prediction intervals; background shading marks the 2007–09 financial crisis and March 2020–June 2021 Covid period. <a href="../../evaluation/methodology/">Methodology</a></p>
+<div class="dash-chart" id="fc-chart" role="region" aria-label="Forecast chart" aria-describedby="fc-description fc-chart-note"></div>
 <details id="fc-data-details">
   <summary>View forecast values and download CSV</summary>
   <button id="fc-download" class="dash-btn" disabled>Download selected forecasts</button>
@@ -86,14 +87,8 @@ hide:
 </details>
 <details id="fc-accuracy">
   <summary>Explore accuracy at the selected horizon</summary>
-  <div class="dash-chart-grid">
-  <div class="dash-chart" id="fc-score-chart" role="region" aria-label="Rolling forecast error"></div>
-  <div class="dash-chart" id="fc-cumulative-chart" role="region" aria-label="Cumulative forecast error"></div>
-  </div>
-  <p class="dash-note" id="fc-relative-note">Cumulative model loss / cumulative RW loss on matching forecast cases at the selected horizon. 1 = RW; below 1 = less error. Totals restart at From. Squared errors are not square-rooted. Ratios are unavailable while cumulative RW loss is zero.</p>
-  <div class="dash-chart" id="fc-relative-chart" role="region" aria-label="Cumulative forecast error relative to RW" aria-describedby="fc-relative-note"></div>
-  <details><summary>View cumulative ratios to RW</summary><div id="fc-relative-table" class="dash-table-scroll" role="region" aria-label="Cumulative ratios to RW" tabindex="0"></div></details>
+  <div class="dash-chart" id="fc-score-chart" role="region" aria-label="Rolling forecast error" aria-describedby="fc-score-note"></div>
+  <p class="dash-note" id="fc-score-note">Background shading marks the 2007–09 financial crisis and March 2020–June 2021 Covid period.</p>
 </details>
 
 </div>
-

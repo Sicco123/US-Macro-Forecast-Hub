@@ -73,15 +73,8 @@ hide:
 <div class="dash-models" id="eval-models">Loading models...</div>
 
 <p id="eval-description" class="visually-hidden"></p>
-<div class="dash-chart-grid">
-<div class="dash-chart" id="eval-chart" role="region" aria-label="Rolling model errors" aria-describedby="eval-description"></div>
-<div class="dash-chart" id="eval-cumulative-chart" role="region" aria-label="Cumulative model errors"></div>
-</div>
-<div id="eval-relative">
-<p class="dash-note" id="eval-relative-note">Cumulative model loss / cumulative RW loss on matching forecast cases. 1 = RW; below 1 = less error. Totals restart at From. Squared errors are not square-rooted. Ratios are unavailable while cumulative RW loss is zero.</p>
-<div class="dash-chart" id="eval-relative-chart" role="region" aria-label="Cumulative model error relative to RW" aria-describedby="eval-relative-note"></div>
-<details><summary>View cumulative ratios to RW</summary><div id="eval-relative-table" class="dash-table-scroll" role="region" aria-label="Cumulative ratios to RW" tabindex="0"></div></details>
-</div>
+<div class="dash-chart" id="eval-chart" role="region" aria-label="Rolling model errors" aria-describedby="eval-description eval-chart-note"></div>
+<p class="dash-note" id="eval-chart-note">Background shading marks the 2007–09 financial crisis and March 2020–June 2021 Covid period.</p>
 <details><summary>View monthly scores</summary><div id="eval-data-table" class="dash-table-scroll" role="region" aria-label="Monthly model scores" tabindex="0"></div></details>
 
 </div>
