@@ -73,8 +73,13 @@ hide:
 <div class="dash-models" id="eval-models">Loading models...</div>
 
 <p id="eval-description" class="visually-hidden"></p>
+<div class="dash-chart-grid">
 <div class="dash-chart" id="eval-chart" role="region" aria-label="Rolling model errors" aria-describedby="eval-description eval-chart-note"></div>
+<div id="eval-relative"><div class="dash-chart" id="eval-relative-chart" role="region" aria-label="Cumulative model error relative to RandomWalk" aria-describedby="eval-relative-note"></div></div>
+</div>
 <p class="dash-note" id="eval-chart-note">Background shading marks the 2007–09 financial crisis and March 2020–June 2021 Covid period.</p>
+<p class="dash-note" id="eval-relative-note">Cumulative model loss / cumulative RandomWalk loss on matching forecast cases. 1 = RandomWalk; below 1 = less error. Totals restart at From. RMSE uses squared errors.</p>
+<details id="eval-relative-details"><summary>View cumulative ratios to RandomWalk</summary><div id="eval-relative-table" class="dash-table-scroll" role="region" aria-label="Cumulative ratios to RandomWalk" tabindex="0"></div></details>
 <details><summary>View monthly scores</summary><div id="eval-data-table" class="dash-table-scroll" role="region" aria-label="Monthly model scores" tabindex="0"></div></details>
 
 </div>

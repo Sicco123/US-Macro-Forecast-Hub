@@ -27,6 +27,7 @@
   const activeTab = ROOT.getAttribute("data-view");
   let scoreRequest = 0, summaryRequest = 0;
   let savedModels = null;
+  let defaultModels = new Set();
   let summarySort = "Overall";
   let minMonth = "2000-01", maxMonth = "2100-12";
   let selectedModels = new Set();
@@ -44,6 +45,8 @@
   const btnShowModels = ROOT.querySelector("#eval-models-show");
   const btnHideModels = ROOT.querySelector("#eval-models-hide");
   const chartDiv = ROOT.querySelector("#eval-chart");
+  const relativeChartDiv = ROOT.querySelector("#eval-relative-chart");
+  const relativeTable = ROOT.querySelector("#eval-relative-table");
   const btnResetZoom = ROOT.querySelector("#eval-reset-zoom");
 
   const selSumMetric = ROOT.querySelector("#eval-sum-metric");
@@ -68,7 +71,8 @@
     summarySort = ["Model", "Overall", "INDPRO", "CPIAUCSL", "PCEPI", "UNRATE"].includes(params.get("sort")) ? params.get("sort") : "Overall";
   }
   function clearCharts() {
-    if (window.Plotly) Plotly.purge(chartDiv);
+    if (window.Plotly) [chartDiv, relativeChartDiv].forEach((d) => Plotly.purge(d));
+    relativeTable.replaceChildren();
     ROOT.querySelector("#eval-data-table").replaceChildren();
     ROOT.querySelector("#eval-description").textContent = "";
   }
@@ -105,7 +109,7 @@
 
   async function onTargetChange() {
     const id = ++scoreRequest, target = selTarget.value;
-    if (currentTarget && savedModels === null) savedModels = [...selectedModels];
+    if (currentTarget && savedModels === null && (selectedModels.size !== defaultModels.size || [...selectedModels].some((m) => !defaultModels.has(m)))) savedModels = [...selectedModels];
     currentTarget = null; clearCharts(); modelBox.replaceChildren();
     [btnShowModels, btnHideModels].forEach((el) => { el.disabled = true; });
     status.textContent = "Loading score history…"; retry.hidden = true; panelScores.setAttribute("aria-busy", "true");
@@ -135,7 +139,10 @@
   function buildModelCheckboxes(data) {
     if (!data) { modelBox.innerHTML = ""; return; }
     const models = Object.keys(data.models).sort();
-    selectedModels = new Set(savedModels === null ? models : savedModels.filter((m) => models.includes(m)));
+    selectedModels = new Set(savedModels === null
+      ? [D.bestModel(data), "MacroHub-RandomWalk"].filter((m) => models.includes(m))
+      : savedModels.filter((m) => models.includes(m)));
+    if (savedModels === null) defaultModels = new Set(selectedModels);
     savedModels = null;
     // Stable color map: sorted order determines color, never changes on selection
     modelColorMap = {};
@@ -274,7 +281,42 @@
     Plotly.react(chartDiv, traces, layout, PLOTLY_CONFIG);
     chartDiv.removeAllListeners && chartDiv.removeAllListeners("plotly_relayout");
     chartDiv.on("plotly_relayout", syncMonthsFromPlotly);
+    drawRelativeChart(data, metricKey, horizon, fromMonth, toMonth);
+  }
 
+  function drawRelativeChart(data, metric, horizon, fromMonth, toMonth) {
+    relativeTable.replaceChildren();
+    const visible = metric === "MAE" || metric === "SqErr";
+    ROOT.querySelector("#eval-relative").hidden = !visible;
+    ROOT.querySelector("#eval-relative-note").hidden = !visible;
+    ROOT.querySelector("#eval-relative-details").hidden = !visible;
+    if (!visible) { Plotly.purge(relativeChartDiv); return; }
+    const models = Object.keys(data.models).sort().filter((m) => selectedModels.has(m));
+    const rows = [];
+    const traces = models.map((model) => {
+      const series = D.relativeCumulative(data, model, metric, horizon, fromMonth, toMonth);
+      series.x.forEach((date, i) => rows.push([D.modelName(model), date, D.format(series.y[i])]));
+      return { ...series, mode: "lines", name: D.modelName(model),
+        line: { color: modelColorMap[model], width: 2.2, dash: D.dashes[Object.keys(data.models).sort().indexOf(model) % D.dashes.length] },
+        hovertemplate: "%{x|%b %Y}<br>Model / RW: %{y:.6g}<extra>" + D.escape(D.modelName(model)) + "</extra>" };
+    });
+    const dark = isDark();
+    Plotly.react(relativeChartDiv, traces, {
+      font: plotlyFont(),
+      title: { text: `Cumulative ${metric === "SqErr" ? "squared" : "absolute"} error / RW`, font: { size: 14 }, x: 0.01 },
+      xaxis: { range: [`${fromMonth}-01`, D.nextMonth(toMonth)], ...D.timeAxis(dark) },
+      yaxis: { title: { text: "Model / RW (1 = RW)", standoff: 10 }, ...plotlyGrid() },
+      shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 1, y1: 1, line: { color: plotlyFont().color, width: 1.5, dash: "dash" } }],
+      annotations: traces.some((t) => t.y.some(Number.isFinite)) ? [] : [{ xref: "paper", yref: "paper", x: 0.5, y: 0.5, showarrow: false,
+        text: selectedModels.size ? "No paired losses with<br>positive RW total in this range." : "Select a model to compare with RW." }],
+      legend: { orientation: "h", y: -0.18, x: 0.5, xanchor: "center" },
+      margin: { t: 36, r: 16, b: 70, l: relativeChartDiv.clientWidth < 500 ? 48 : 70 },
+      hovermode: "x unified", height: relativeChartDiv.clientWidth < 500 ? 420 : 500,
+      plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
+    }, PLOTLY_CONFIG);
+    D.table(relativeTable, ["Model", "Origin", "Model / RW"], rows, "Cumulative error / RW");
+    relativeChartDiv.removeAllListeners && relativeChartDiv.removeAllListeners("plotly_relayout");
+    relativeChartDiv.on("plotly_relayout", syncMonthsFromPlotly);
   }
 
   const SUMMARY_TARGETS = ["INDPRO", "CPIAUCSL", "PCEPI", "UNRATE"];

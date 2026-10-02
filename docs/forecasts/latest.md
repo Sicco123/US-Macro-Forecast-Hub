@@ -87,8 +87,13 @@ hide:
 </details>
 <details id="fc-accuracy">
   <summary>Explore accuracy at the selected horizon</summary>
+  <div class="dash-chart-grid">
   <div class="dash-chart" id="fc-score-chart" role="region" aria-label="Rolling forecast error" aria-describedby="fc-score-note"></div>
+  <div class="dash-chart" id="fc-relative-chart" role="region" aria-label="Cumulative forecast error relative to RandomWalk" aria-describedby="fc-relative-note"></div>
+  </div>
   <p class="dash-note" id="fc-score-note">Background shading marks the 2007–09 financial crisis and March 2020–June 2021 Covid period.</p>
+  <p class="dash-note" id="fc-relative-note">Cumulative model loss / cumulative RandomWalk loss on matching forecast cases. 1 = RandomWalk; below 1 = less error. Totals restart at From. RMSE uses squared errors.</p>
+  <details><summary>View cumulative ratios to RandomWalk</summary><div id="fc-relative-table" class="dash-table-scroll" role="region" aria-label="Cumulative ratios to RandomWalk" tabindex="0"></div></details>
 </details>
 
 </div>
