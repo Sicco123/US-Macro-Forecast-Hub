@@ -42,8 +42,9 @@
       const [year, month] = value.split("-").map(Number);
       return `${month === 12 ? year + 1 : year}-${String(month === 12 ? 1 : month + 1).padStart(2, "0")}-01`;
     },
-    timeAxis: (dark) => ({
+    timeAxis: (dark, label) => ({
       tickmode: "linear", tick0: "2000-01-01", dtick: "M60", tickformat: "%Y",
+      hoverformat: label ? `%b %Y · ${label}` : "%b %Y",
       showgrid: true, gridcolor: dark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)",
       minor: { tickmode: "linear", tick0: "2000-01-01", dtick: "M12", showgrid: true,
         gridcolor: dark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.04)" },

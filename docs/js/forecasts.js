@@ -427,7 +427,7 @@
       traces.push({
         x: xArr, y: yArr, mode: "lines", name: "Observed",
         line: { color: isDark() ? "#b0bec5" : "#37474f", width: 2.2 },
-        hovertemplate: `%{x|%b %Y}<br>Value: %{y:.${decimals}f}<extra>Observed</extra>`,
+        hovertemplate: `Observed: %{y:.${decimals}f}<extra></extra>`,
       });
     }
 
@@ -465,7 +465,7 @@
         line: { color: color, width: 2.8, dash: D.dashes[Object.keys(fcData.models).sort().indexOf(model) % D.dashes.length] },
         marker: { size: 6, color: color },
         customdata: points.map((p) => p.statistic),
-        hovertemplate: "%{x|%b %Y}<br>%{customdata}: %{y:.6g}<extra>" + D.escape(D.modelName(model)) + "</extra>",
+        hovertemplate: D.escape(D.modelName(model)) + " (%{customdata}): %{y:.6g}<extra></extra>",
       });
     });
 
@@ -491,7 +491,7 @@
       title: { text: currentTarget, font: { size: 16, color: titleColor }, x: 0.01 },
       xaxis: {
         range: [`${fromMonth}-01`, D.nextMonth(toMonth)],
-        ...D.timeAxis(dark),
+        ...D.timeAxis(dark, currentTarget),
         spikecolor: spikeColor, spikethickness: 1,
       },
       yaxis: {
@@ -569,7 +569,7 @@
       traces.push({
         x: filtDates, y: rolling, mode: "lines", name: D.modelName(model),
         line: { color: color, width: 2.2, dash: D.dashes[Object.keys(fcData.models).sort().indexOf(model) % D.dashes.length] },
-        hovertemplate: "%{x|%b %Y}<br>" + displayName + ": %{y:.6g}<extra>" + D.escape(D.modelName(model)) + "</extra>",
+        hovertemplate: D.escape(D.modelName(model)) + ": %{y:.6g}<extra></extra>",
       });
     });
 
@@ -579,7 +579,7 @@
       title: { text: `${displayName} — horizon ${maxHorizon} (12-month rolling avg)`, font: { size: 14, color: dark2 ? "#ccc" : "#555" }, x: 0.01 },
       xaxis: {
         range: [`${fromMonth}-01`, D.nextMonth(toMonth)],
-        ...D.timeAxis(dark2),
+        ...D.timeAxis(dark2, displayName),
         spikecolor: dark2 ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)", spikethickness: 1,
       },
       yaxis: { title: { text: displayName, standoff: 10 }, ...plotlyGrid() },
@@ -608,15 +608,15 @@
       series.x.forEach((date, i) => rows.push([D.modelName(model), date, D.format(series.y[i])]));
       return { ...series, mode: "lines", name: D.modelName(model),
         line: { color: modelColorMap[model], width: 2.2, dash: D.dashes[Object.keys(fcData.models).sort().indexOf(model) % D.dashes.length] },
-        hovertemplate: "%{x|%b %Y}<br>Model / RW: %{y:.6g}<extra>" + D.escape(D.modelName(model)) + "</extra>" };
+        hovertemplate: D.escape(D.modelName(model)) + ": %{y:.6g}<extra></extra>" };
     });
     const dark = isDark();
     Plotly.react(relativeChartDiv, traces, {
       font: plotlyFont(),
       title: { text: `Cumulative ${metric === "SqErr" ? "squared" : "absolute"} error / RW`, font: { size: 14 }, x: 0.01 },
-      xaxis: { range: [`${fromMonth}-01`, D.nextMonth(toMonth)], ...D.timeAxis(dark) },
+      xaxis: { range: [`${fromMonth}-01`, D.nextMonth(toMonth)], ...D.timeAxis(dark, `Cumulative ${metric === "SqErr" ? "SE" : "AE"} / RW`) },
       yaxis: { title: { text: "Model / RW (1 = RW)", standoff: 10 }, ...plotlyGrid() },
-      shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 1, y1: 1, line: { color: plotlyFont().color, width: 1.5, dash: "dash" } }],
+      shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 1, y1: 1, line: { color: plotlyFont().color, width: 1.5, dash: "dash" } }, ...D.crisisShapes(dark)],
       annotations: traces.some((t) => t.y.some(Number.isFinite)) ? [] : [{ xref: "paper", yref: "paper", x: 0.5, y: 0.5, showarrow: false,
         text: selectedModels.size ? "No paired losses with<br>positive RW total in this range." : "Select a model to compare with RW." }],
       legend: { orientation: "h", y: -0.18, x: 0.5, xanchor: "center" },
