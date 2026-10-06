@@ -155,3 +155,6 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   .dash-slider-row input[type="range"] { order: 2; flex-basis: 100%; width: 100%; }
   .dash-slider-row .slider-date { margin-left: auto; min-width: 0; }
 }
+.md-typeset .admonition.info, .md-typeset details.info { border-color: #43a047; }
+.md-typeset .info > .admonition-title, .md-typeset .info > summary { background-color: rgba(67,160,71,.1); }
+.md-typeset .info > .admonition-title::before, .md-typeset .info > summary::before { background-color: #43a047; }

@@ -51,8 +51,24 @@
     }),
     crisisShapes: (dark) => [["2007-12-01", "2009-07-01"], ["2020-03-01", "2021-07-01"]].map(([x0, x1]) => ({
       type: "rect", x0, x1, y0: 0, y1: 1, yref: "paper", layer: "below", line: { width: 0 },
-      fillcolor: dark ? "rgba(255,180,100,0.10)" : "rgba(160,85,35,0.09)",
+      fillcolor: dark ? "rgba(129,199,132,0.12)" : "rgba(46,125,50,0.10)",
     })),
+    hoverLabel: (dark) => ({ bgcolor: dark ? "#2e2e2e" : "#fff", font: { color: dark ? "#ddd" : "#333", family: "'JetBrains Mono', monospace" } }),
+    // Unified hover rows "Name:   value": names padded, values right-aligned (needs the monospace hoverLabel).
+    // At least 3 decimals; more for tiny values (CPI MAE ~0.003) so ~3 significant digits survive.
+    alignHover(traces) {
+      const shown = traces.filter((t) => t.hoverinfo !== "skip");
+      const max = shown.flatMap((t) => t.y).filter(Number.isFinite).reduce((a, v) => Math.max(a, Math.abs(v)), 0);
+      const dec = max > 0 ? Math.max(3, 2 - Math.floor(Math.log10(max))) : 3;
+      const width = Math.max(0, ...shown.map((t) => t.name.length)) + 1;
+      shown.forEach((t) => {
+        // Pre-formatted in JS: Plotly drops d3 formats with a custom fill character.
+        t.text = t.y.map((v) => Number.isFinite(v) ? v.toFixed(dec).padStart(dec + 6, "\u00A0") : "");
+        t.hovertemplate = D.escape((t.name + ":").padEnd(width, "\u00A0")) + "%{text}"
+          + (t.customdata ? "\u00A0(%{customdata})" : "") + "<extra></extra>";
+      });
+      return traces;
+    },
     range(from, to) {
       const valid = D.validMonth(from.value) && D.validMonth(to.value) && from.validity.valid && to.validity.valid && from.value <= to.value;
       from.setAttribute("aria-invalid", String(!valid));

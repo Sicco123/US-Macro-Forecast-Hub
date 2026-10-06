@@ -251,7 +251,6 @@
       traces.push({
         x: filtDates, y: rolling, mode: "lines", name: D.modelName(model),
         line: { color: color, width: 2.5, dash: D.dashes[Object.keys(data.models).sort().indexOf(model) % D.dashes.length] },
-        hovertemplate: D.escape(D.modelName(model)) + ": %{y:.6g}<extra></extra>",
       });
     });
 
@@ -273,12 +272,12 @@
       legend: { orientation: "h", y: -0.15, x: 0.5, xanchor: "center",
                 font: { size: 12 }, bgcolor: "rgba(0,0,0,0)" },
       margin: { t: 40, r: 16, b: 70, l: chartDiv.clientWidth < 500 ? 48 : 70 },
-      hovermode: "x unified", hoverlabel: { bgcolor: dark ? "#2e2e2e" : "#fff", font: { color: dark ? "#ddd" : "#333" } },
+      hovermode: "x unified", hoverlabel: D.hoverLabel(dark),
       height: chartDiv.clientWidth < 500 ? 420 : 500,
       plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
     };
 
-    Plotly.react(chartDiv, traces, layout, PLOTLY_CONFIG);
+    Plotly.react(chartDiv, D.alignHover(traces), layout, PLOTLY_CONFIG);
     chartDiv.removeAllListeners && chartDiv.removeAllListeners("plotly_relayout");
     chartDiv.on("plotly_relayout", syncMonthsFromPlotly);
     drawRelativeChart(data, metricKey, horizon, fromMonth, toMonth);
@@ -297,13 +296,12 @@
       const series = D.relativeCumulative(data, model, metric, horizon, fromMonth, toMonth);
       series.x.forEach((date, i) => rows.push([D.modelName(model), date, D.format(series.y[i])]));
       return { ...series, mode: "lines", name: D.modelName(model),
-        line: { color: modelColorMap[model], width: 2.2, dash: D.dashes[Object.keys(data.models).sort().indexOf(model) % D.dashes.length] },
-        hovertemplate: D.escape(D.modelName(model)) + ": %{y:.6g}<extra></extra>" };
+        line: { color: modelColorMap[model], width: 2.2, dash: D.dashes[Object.keys(data.models).sort().indexOf(model) % D.dashes.length] } };
     });
     const dark = isDark();
-    Plotly.react(relativeChartDiv, traces, {
+    Plotly.react(relativeChartDiv, D.alignHover(traces), {
       font: plotlyFont(),
-      title: { text: `Cumulative ${metric === "SqErr" ? "squared" : "absolute"} error / RW`, font: { size: 14 }, x: 0.01 },
+      title: { text: `Cumulative ${metric === "SqErr" ? "squared" : "absolute"} error / RW`, font: { size: 16 }, x: 0.01 },
       xaxis: { range: [`${fromMonth}-01`, D.nextMonth(toMonth)], ...D.timeAxis(dark, `Cumulative ${metric === "SqErr" ? "SE" : "AE"} / RW`) },
       yaxis: { title: { text: "Model / RW (1 = RW)", standoff: 10 }, ...plotlyGrid() },
       shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 1, y1: 1, line: { color: plotlyFont().color, width: 1.5, dash: "dash" } }, ...D.crisisShapes(dark)],
@@ -311,7 +309,7 @@
         text: selectedModels.size ? "No paired losses with<br>positive RW total in this range." : "Select a model to compare with RW." }],
       legend: { orientation: "h", y: -0.18, x: 0.5, xanchor: "center" },
       margin: { t: 36, r: 16, b: 70, l: relativeChartDiv.clientWidth < 500 ? 48 : 70 },
-      hovermode: "x unified", height: relativeChartDiv.clientWidth < 500 ? 420 : 500,
+      hovermode: "x unified", hoverlabel: D.hoverLabel(dark), height: relativeChartDiv.clientWidth < 500 ? 420 : 500,
       plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
     }, PLOTLY_CONFIG);
     D.table(relativeTable, ["Model", "Origin", "Model / RW"], rows, "Cumulative error / RW");

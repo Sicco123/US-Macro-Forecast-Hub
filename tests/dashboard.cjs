@@ -109,6 +109,11 @@ async function checkModelButtons(env, prefix) {
   assert.equal(D.timeAxis(false).dtick, 'M60');
   assert.equal(D.timeAxis(false).minor.dtick, 'M12');
   assert.ok(D.timeAxis(false).minor.gridcolor !== D.timeAxis(false).gridcolor);
+  const hov = D.alignHover([{name:'A',y:[0.0031,null]},{name:'Longer',y:[0.001]},{name:'skip',y:[9],hoverinfo:'skip'}]);
+  assert.equal(hov[0].hovertemplate, 'A:\u00A0\u00A0\u00A0\u00A0\u00A0%{text}<extra></extra>');
+  assert.deepEqual(hov[0].text, ['\u00A0\u00A0\u00A0\u00A00.00310', '']);
+  assert.equal(hov[2].hovertemplate, undefined);
+  assert.deepEqual(D.alignHover([{name:'R',y:[0.97,1.2]}])[0].text, ['\u00A0\u00A0\u00A0\u00A00.970', '\u00A0\u00A0\u00A0\u00A01.200']);
   assert.deepEqual(Array.from(D.crisisShapes(false), s => [s.x0,s.x1]), [['2007-12-01','2009-07-01'],['2020-03-01','2021-07-01']]);
   const tiny = {X:{origin_dates:['2020-01-17'],models:{A:{h0:{MAE:[0],SqErr:[0]},h1:{MAE:[100],SqErr:[100]}},B:{h0:{MAE:[1],SqErr:[1]},h1:{MAE:[2],SqErr:[4]}},C:{h0:{MAE:[1],SqErr:[1]},h1:{MAE:[2],SqErr:[4]}}}}};
   const opts = {horizon:'all',fromMonth:'2000-01',toMonth:'2026-12',includeCovid:true};
