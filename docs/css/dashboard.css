@@ -146,6 +146,44 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 #fc-dashboard details, #eval-dashboard details { margin: 16px 0; }
 #fc-dashboard summary, #eval-dashboard summary { padding: 12px 12px 12px 2.4rem; cursor: pointer; font-weight: 600; }
 .visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip-path: inset(50%); white-space: nowrap; border: 0 !important; }
+
+/* Forecast tools stay secondary to the chart and inherit both site themes. */
+.fc-chart-toolbar, .fc-range-buttons, .fc-chart-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fc-chart-toolbar { justify-content: space-between; margin: 24px 0 12px; }
+.fc-toolbar-label { font-size: .7rem; color: var(--md-default-fg-color--light); margin-right: 4px; }
+.fc-range-buttons button { min-height: 44px; padding: 0 12px; border-radius: 6px; font: 600 .7rem/1.2 Inter, system-ui, sans-serif; cursor: pointer; }
+.fc-range-buttons button:hover { background: var(--md-code-bg-color); }
+.fc-range-buttons button[aria-pressed="true"] { background: var(--dash-success-bg); color: var(--dash-success-text); }
+#fc-dashboard .fc-export { position: relative; margin: 0; border: 0; box-shadow: none; padding: 0; background: transparent; overflow: visible; }
+#fc-dashboard .fc-export > summary { display: flex; align-items: center; gap: 10px; height: 44px; margin: 0; padding: 0 14px; border: 1px solid var(--dash-accent); border-radius: 6px; color: var(--dash-accent); background: var(--md-default-bg-color); font: 600 .75rem/1.2 Inter, system-ui, sans-serif; }
+#fc-dashboard .fc-export > summary::before { display: none; }
+#fc-dashboard .fc-export > summary::after { content: ""; position: static; width: 6px; height: 6px; margin: 0; background: none; mask: none; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+#fc-dashboard .fc-export > summary[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+.fc-export-options { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; min-width: 170px; padding: 6px; background: var(--md-default-bg-color); border: 1px solid var(--md-default-fg-color--lightest); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+.fc-export-options button { display: block; width: 100%; min-height: 44px; padding: 8px 12px; text-align: left; border-radius: 4px; color: var(--md-default-fg-color); font: 400 .75rem/1.3 Inter, system-ui, sans-serif; cursor: pointer; }
+.fc-export-options button:hover { background: var(--md-code-bg-color); }
+.fc-navigator-note { margin: 0; font-size: .65rem; color: var(--md-default-fg-color--light); }
+#fc-chart :is(.rangeslider-mask-min, .rangeslider-mask-max) { fill: var(--md-default-bg-color) !important; fill-opacity: .65 !important; }
+#fc-dashboard .fc-series-info { display: grid; grid-template-columns: 1.4fr 1.4fr .7fr 1fr; gap: 16px; margin: 20px 0 24px; padding: 16px 0; border-top: 1px solid var(--md-default-fg-color--lightest); border-bottom: 1px solid var(--md-default-fg-color--lightest); }
+.fc-series-info :is(dt, dd) { margin: 0; }
+.fc-series-info dt { font-size: .65rem; font-weight: 500; color: var(--md-default-fg-color--light); }
+#fc-dashboard .fc-series-info dd { margin: 4px 0 0; font-size: .75rem; line-height: 1.5; font-variant-numeric: tabular-nums; }
+#fc-chart-frame:fullscreen, #fc-chart-frame.fc-expanded { box-sizing: border-box; padding: 24px; background: var(--md-default-bg-color); overflow: auto; }
+#fc-chart-frame.fc-expanded { position: fixed; inset: 0; z-index: 10; }
+#fc-chart-frame:fullscreen .fc-chart-toolbar, #fc-chart-frame.fc-expanded .fc-chart-toolbar { margin-top: 0; }
+@media (max-width: 600px) {
+  .fc-chart-toolbar { gap: 12px; }
+  .fc-chart-actions { margin-left: auto; }
+  #fc-dashboard .fc-series-info { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #fc-chart-frame:fullscreen, #fc-chart-frame.fc-expanded { padding: 12px; }
+}
+@media print {
+  body:has(#fc-dashboard) :is(.md-header, .md-tabs, .md-sidebar, .md-footer, .md-top, .fc-chart-toolbar, .fc-navigator-note),
+  #fc-dashboard > :not(#fc-chart-frame) { display: none !important; }
+  #fc-chart-frame { position: static !important; padding: 0 !important; overflow: visible !important; }
+  #fc-dashboard .fc-series-info { break-inside: avoid; }
+  .md-main, .md-content, .md-content__inner { margin: 0 !important; padding: 0 !important; }
+}
 @media (max-width: 900px) { .dash-chart-grid { grid-template-columns: 1fr; gap: 0; } }
 @media (max-width: 600px) {
   .md-tabs__list { gap: 0; padding: 4px; }

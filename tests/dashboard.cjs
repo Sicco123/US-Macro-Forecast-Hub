@@ -14,7 +14,8 @@ function environment(page, query = '') {
     constructor(tag = 'div', attrs = '') {
       this.tagName = tag.toUpperCase(); this.attrs = {}; this.events = {}; this.style = {}; this.dataset = {};
       this.clientWidth = 375; this.options = []; this.children = []; this.textContent = ''; this.value = '';
-      this.classList = { toggle() {} };
+      const classes = new Set();
+      this.classList = { contains: name => classes.has(name), toggle(name, on = !classes.has(name)) { if (on) classes.add(name); else classes.delete(name); } };
       for (const m of attrs.matchAll(/([\w-]+)="([^"]*)"/g)) { this[m[1]] = m[2]; this.attrs[m[1]] = m[2]; }
       this.checked = /\bchecked\b/.test(attrs); this.hidden = /\bhidden\b/.test(attrs);
     }
@@ -31,6 +32,7 @@ function environment(page, query = '') {
     querySelector(s) { return s[0] === '#' ? elements[s.slice(1)] : (elements[s] ||= new Element()); }
     querySelectorAll(s) { return s === 'input' ? this.children : []; }
     closest() { return ['INPUT','BUTTON','SELECT','SUMMARY'].includes(this.tagName) ? this : null; }
+    contains(el) { return el === this || this.children.includes(el); }
     focus() { this.focused = true; }
     append(el) { this.children.push(el); }
   }
@@ -43,8 +45,8 @@ function environment(page, query = '') {
   }
   const context = { console, URL, URLSearchParams, Blob, setTimeout, clearTimeout, setInterval, clearInterval,
     location: new URL('http://localhost/' + query), MutationObserver: class { observe() {} },
-    document: { currentScript:{src:'http://localhost/js/dashboard.js'}, readyState:'loading',
-      body:new Element(), getElementById:id=>elements[id], querySelectorAll:()=>[], addEventListener(){},
+    document: { currentScript:{src:'http://localhost/js/dashboard.js'}, readyState:'loading', events:{},
+      body:new Element(), getElementById:id=>elements[id], querySelectorAll:()=>[], addEventListener(k, fn){ (this.events[k] ||= []).push(fn); },
       createElement:tag=>new Element(tag), head:{append(){}} },
     Plotly: { react(el,traces,layout) { el.traces=traces; el.layout=layout; }, purge(el) { el.traces=[]; el.layout=null; } },
     addEventListener() {},
@@ -74,7 +76,7 @@ async function checkModelButtons(env, prefix) {
   assert.ok(boxes().every(cb => !cb.checked));
   assert.equal(context.location.searchParams.get('models'), '');
   for (const chart of charts) assert.equal(elements[`${prefix}-${chart}`].traces.length, 0);
-  if (prefix === 'fc') assert.deepEqual(Array.from(elements['fc-chart'].traces, t => t.name), ['Observed']);
+  if (prefix === 'fc') assert.deepEqual(Array.from(elements['fc-chart'].traces.filter(t => t.name), t => t.name), ['Observed']);
   await ui.onTargetChange();
   assert.ok(boxes().every(cb => !cb.checked));
   click('models-show');
@@ -147,6 +149,90 @@ async function checkModelButtons(env, prefix) {
   assert.equal(fc.elements['fc-slider-label'].textContent,'2026-03-17');
   assert.equal(fc.elements['fc-next'].disabled,false);
   const fcDefault = fc.D.bestModel(data('scores_INDPRO.json'));
+  const mainChart = fc.elements['fc-chart'];
+  const fullHistoryY = Array.from(mainChart.layout.yaxis.range);
+  assert.equal(mainChart.layout.yaxis.fixedrange, true);
+  assert.equal(mainChart.layout.xaxis.rangeslider.visible, true);
+  const crisisBands = mainChart.traces.slice(0, 2);
+  assert.deepEqual(Array.from(crisisBands, t => Array.from(t.x)), [
+    ['2007-12-01','2009-07-01','2009-07-01','2007-12-01'],
+    ['2020-03-01','2021-07-01','2021-07-01','2020-03-01'],
+  ]);
+  crisisBands.forEach((t, i) => {
+    assert.equal(t.fill, 'toself');
+    assert.equal(t.fillcolor, fc.D.crisisShapes(false)[i].fillcolor);
+    assert.deepEqual(Array.from(t.y), [fullHistoryY[0],fullHistoryY[0],fullHistoryY[1],fullHistoryY[1]]);
+    assert.equal(t.showlegend, false);
+    assert.equal(t.hoverinfo, 'skip');
+  });
+  assert.deepEqual(Array.from(mainChart.layout.xaxis.rangeslider.range), ['2000-01-01','2029-01-01']);
+  assert.equal(mainChart.traces.find(t => t.name === 'Observed').x[0].slice(0,7), '2000-01');
+  assert.match(fc.elements['fc-series-units'].textContent, /Monthly.*log change/);
+  assert.equal(fc.elements['fc-series-origin'].textContent, '2026-03-17');
+  const originBeforePresets = fc.elements['fc-slider-label'].textContent;
+  fc.elements['fc-range-1y'].events.click[0]();
+  assert.equal(fc.elements['fc-month-from'].value, '2025-03');
+  assert.equal(fc.elements['fc-month-to'].value, '2028-03');
+  assert.equal(fc.elements['fc-slider-label'].textContent, originBeforePresets);
+  assert.equal(fc.elements['fc-range-1y'].attrs['aria-pressed'], 'true');
+  assert.deepEqual(Array.from(mainChart.layout.yaxis.range), fullHistoryY);
+  assert.match(mainChart.layout.xaxis.dtick, /^M\d+$/);
+  assert.ok(+mainChart.layout.xaxis.dtick.slice(1) < 60);
+  fc.elements['fc-range-origin'].events.click[0]();
+  assert.equal(fc.elements['fc-month-from'].value, '2025-09');
+  assert.deepEqual(Array.from(mainChart.layout.yaxis.range), fullHistoryY);
+  fc.elements['fc-range-all'].events.click[0]();
+  assert.equal(fc.elements['fc-month-from'].value, '2000-01');
+  assert.equal(fc.elements['fc-month-to'].value, '2028-12');
+  assert.deepEqual(Array.from(mainChart.layout.yaxis.range), fullHistoryY);
+  // Native Plotly navigators send array ranges; box zoom sends separate endpoints.
+  mainChart.events.plotly_relayout[0]({'xaxis.range':['2021-01-01','2029-01-01']});
+  assert.equal(fc.elements['fc-month-to'].value, '2028-12');
+  mainChart.events.plotly_relayout[0]({'xaxis.range[0]':'2021-01-01','xaxis.range[1]':'2029-01-01'});
+  assert.equal(fc.elements['fc-month-to'].value, '2028-12');
+  assert.equal(mainChart.events.plotly_relayout.length, 1);
+  // Reloading a bookmarked zoom uses the same scale as the wider chart.
+  const zoomed = environment('fc', `?from=2020-03&to=2020-06&models=${fc.context.location.searchParams.get('models')}`);
+  await zoomed.ui.init();
+  assert.deepEqual(Array.from(zoomed.elements['fc-chart'].layout.yaxis.range), fullHistoryY);
+  const covidTruth = data('truth.json').INDPRO;
+  covidTruth.dates.forEach((date, i) => {
+    if (date >= '2020-03-01' && date < '2020-07-01') {
+      const value = covidTruth.transformed_values[i];
+      assert.ok(value >= fullHistoryY[0] && value <= fullHistoryY[1]);
+    }
+  });
+  zoomed.elements['fc-chart'].events.plotly_relayout[0]({'xaxis.range':['2021-01-01','2029-01-01']});
+  assert.deepEqual(Array.from(zoomed.elements['fc-chart'].layout.yaxis.range), fullHistoryY);
+  let exported;
+  fc.context.Plotly.downloadImage = async (el, options) => { exported = { el, options }; };
+  fc.elements['fc-export-svg'].events.click[0](); await tick();
+  assert.equal(exported.el, mainChart);
+  assert.equal(exported.options.format, 'svg');
+  assert.equal(exported.options.filename, 'INDPRO-2026-03-17');
+  fc.context.Plotly.downloadImage = async () => { throw Error('export failed'); };
+  fc.elements['fc-export-png'].events.click[0](); await tick();
+  assert.match(fc.elements['fc-status'].textContent, /export failed/);
+  assert.equal(fc.elements['fc-export-png'].disabled, false);
+  await fc.elements['fc-fullscreen'].events.click[0]();
+  assert.equal(fc.elements['fc-fullscreen'].textContent, 'Exit fullscreen');
+  await fc.elements['fc-fullscreen'].events.click[0]();
+  assert.equal(fc.elements['fc-fullscreen'].textContent, 'Fullscreen');
+  fc.elements['fc-chart-frame'].requestFullscreen = async () => { throw Error('Native fullscreen unavailable'); };
+  await fc.elements['fc-fullscreen'].events.click[0]();
+  assert.equal(fc.elements['fc-fullscreen'].textContent, 'Exit fullscreen');
+  assert.equal(fc.elements['fc-chart-frame'].attrs['aria-modal'], 'true');
+  const firstControl = fc.elements['fc-range-1y'], lastControl = fc.elements['fc-print'];
+  firstControl.getClientRects = lastControl.getClientRects = () => [{}];
+  fc.elements['fc-chart-frame'].querySelectorAll = () => [firstControl, lastControl];
+  fc.context.document.activeElement = lastControl;
+  let tabPrevented = false;
+  fc.context.document.events.keydown[0]({key:'Tab', shiftKey:false, preventDefault(){tabPrevented = true;}});
+  assert.equal(tabPrevented, true); assert.equal(firstControl.focused, true);
+  fc.context.document.activeElement = firstControl;
+  fc.context.document.events.keydown[0]({key:'Tab', shiftKey:true, preventDefault(){}});
+  assert.equal(lastControl.focused, true);
+  await fc.elements['fc-fullscreen'].events.click[0]();
   assert.deepEqual(fc.elements['fc-models'].querySelectorAll('input').filter(cb => cb.checked).map(cb => cb.value).sort(), [fcDefault, 'MacroHub-RandomWalk'].sort());
   assert.ok(fc.elements['fc-chart'].traces.some(t=>t.name==='RandomWalk'));
   const fixedY = [...fc.elements['fc-chart'].layout.yaxis.range];
@@ -158,9 +244,9 @@ async function checkModelButtons(env, prefix) {
   assert.deepEqual(Array.from(fc.elements['fc-chart'].layout.yaxis.range), fixedY);
   fc.elements['fc-chart'].events.plotly_relayout[0]({'yaxis.range[0]':-1,'yaxis.range[1]':1});
   fc.ui.stepSlider(-1);
-  assert.deepEqual(Array.from(fc.elements['fc-chart'].layout.yaxis.range),[-1,1]);
+  assert.deepEqual(Array.from(fc.elements['fc-chart'].layout.yaxis.range),fixedY);
   fc.ui.stepSlider(1);
-  assert.equal(fc.elements['fc-chart'].layout.shapes.length, 3);
+  assert.equal(fc.elements['fc-chart'].layout.shapes.length, 1);
   fc.elements['fc-accuracy'].open = true; fc.elements['fc-accuracy'].events.toggle[0]();
   assert.ok(fc.elements['fc-relative-chart'].traces.some(t => t.name === 'RandomWalk'));
   assert.equal(fc.elements['fc-relative-chart'].layout.shapes[0].y0, 1);
@@ -177,6 +263,10 @@ async function checkModelButtons(env, prefix) {
   assert.equal(fc.elements['fc-score-chart'].traces.length,0);
   fc.elements['fc-month-from'].value='2027-01'; fc.elements['fc-month-to'].value='2028-12'; fc.ui.onRangeChange();
   assert.match(fc.elements['fc-status'].textContent,/No forecasts for the selected models/); fc.ui.stepSlider(1);
+  assert.equal(fc.elements['fc-export-csv'].disabled, true);
+  assert.equal(fc.elements['fc-chart'].layout.xaxis.rangeslider.visible, true);
+  fc.elements['fc-range-all'].events.click[0]();
+  assert.equal(fc.elements['fc-export-csv'].disabled, false);
   const restored = environment('fc','?target=CPIAUCSL&from=2000&to=2001&origin=2000-01-17&models=MacroHub-Ensemble&horizon=2');
   await restored.ui.init();
   const trace=restored.elements['fc-chart'].traces.find(t=>t.name==='Ensemble');
@@ -197,11 +287,14 @@ async function checkModelButtons(env, prefix) {
   restored.elements['fc-target'].value='INDPRO'; const old=restored.ui.onTargetChange();
   restored.elements['fc-target'].value='UNRATE'; await restored.ui.onTargetChange(); resolveOld(data('forecasts_INDPRO.json')); await old;
   assert.equal(restored.elements['fc-chart'].layout.title.text,'UNRATE');
+  assert.match(restored.elements['fc-series-units'].textContent, /percentage points/);
   restored.D.json=async()=>{throw Error('offline')}; await restored.ui.onTargetChange();
   assert.match(restored.elements['fc-status'].textContent,/Could not load/); assert.equal(restored.elements['fc-retry'].hidden,false);
   assert.equal(restored.elements['fc-models-show'].disabled,true);
   assert.equal(restored.elements['fc-models-hide'].disabled,true);
   assert.equal(restored.elements['fc-score-chart'].traces.length,0);
+  assert.equal(restored.elements['fc-series-info'].hidden,true);
+  assert.equal(restored.elements['fc-fullscreen'].disabled,true);
 
   const ev=environment('eval'); ev.ui.init(); await tick();
   assert.equal(ev.elements['eval-sum-view'].value,'geomean');

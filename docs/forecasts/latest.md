@@ -78,8 +78,39 @@ hide:
 <p class="dash-note">The slider shows dates with forecasts from the selected models.</p>
 
 <p id="fc-description" class="visually-hidden"></p>
+<div id="fc-chart-frame">
+<div class="fc-chart-toolbar">
+  <div class="fc-range-buttons" role="group" aria-label="Chart date shortcuts">
+    <span class="fc-toolbar-label">View</span>
+    <button id="fc-range-1y" type="button" aria-pressed="false" title="One year of history plus the forecast" disabled>1 year</button>
+    <button id="fc-range-5y" type="button" aria-pressed="false" title="Five years of history plus the forecast" disabled>5 years</button>
+    <button id="fc-range-all" type="button" aria-pressed="false" disabled>All</button>
+    <button id="fc-range-origin" type="button" aria-pressed="false" title="Six months of history plus the forecast" disabled>Around origin</button>
+  </div>
+  <div class="fc-chart-actions">
+    <button id="fc-fullscreen" type="button" class="dash-btn" aria-pressed="false" disabled>Fullscreen</button>
+    <details id="fc-export" class="fc-export">
+      <summary aria-disabled="true">Export</summary>
+      <div class="fc-export-options">
+        <button id="fc-export-png" type="button" disabled>PNG image</button>
+        <button id="fc-export-jpeg" type="button" disabled>JPEG image</button>
+        <button id="fc-export-svg" type="button" disabled>SVG vector</button>
+        <button id="fc-export-csv" type="button" disabled>Forecast CSV</button>
+        <button id="fc-print" type="button" disabled>Print chart</button>
+      </div>
+    </details>
+  </div>
+</div>
 <p class="dash-note" id="fc-chart-note">Forecast bands show 80% and 90% prediction intervals; background shading marks the 2007–09 financial crisis and March 2020–June 2021 Covid period. <a href="../../evaluation/methodology/">Methodology</a></p>
 <div class="dash-chart" id="fc-chart" role="region" aria-label="Forecast chart" aria-describedby="fc-description fc-chart-note"></div>
+<p class="fc-navigator-note">Drag the timeline handles to change the visible period. Date shortcuts keep the forecast in view.</p>
+<dl id="fc-series-info" class="fc-series-info" hidden>
+  <div><dt>Series</dt><dd id="fc-series-name"></dd></div>
+  <div><dt>Frequency &amp; units</dt><dd id="fc-series-units"></dd></div>
+  <div><dt>Data source</dt><dd><a href="../../indicators/target-data/">FRED-MD</a></dd></div>
+  <div><dt>Forecast origin</dt><dd id="fc-series-origin"></dd></div>
+</dl>
+</div>
 <details id="fc-data-details">
   <summary>View forecast values and download CSV</summary>
   <button id="fc-download" class="dash-btn" disabled>Download selected forecasts</button>

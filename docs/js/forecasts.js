@@ -59,6 +59,15 @@
   const relativeChartDiv = ROOT.querySelector("#fc-relative-chart");
   const relativeTable = ROOT.querySelector("#fc-relative-table");
   const btnResetZoom = ROOT.querySelector("#fc-reset-zoom");
+  const chartFrame = ROOT.querySelector("#fc-chart-frame");
+  const seriesInfo = ROOT.querySelector("#fc-series-info");
+  const btnFullscreen = ROOT.querySelector("#fc-fullscreen");
+  const exportMenu = ROOT.querySelector("#fc-export");
+  const rangeButtons = ["1y", "5y", "all", "origin"].map((key) => [key, ROOT.querySelector(`#fc-range-${key}`)]);
+  const exportButtons = ["png", "jpeg", "svg", "csv"].map((key) => [key, ROOT.querySelector(`#fc-export-${key}`)]);
+  const btnPrint = ROOT.querySelector("#fc-print");
+  let chartReady = false;
+  let expanded = false;
 
   const status = ROOT.querySelector("#fc-status");
   const retry = ROOT.querySelector("#fc-retry");
@@ -66,10 +75,23 @@
   const tableDiv = ROOT.querySelector("#fc-table");
   const download = ROOT.querySelector("#fc-download");
   const accuracy = ROOT.querySelector("#fc-accuracy");
+  function updateChartActions() {
+    const busy = ROOT.getAttribute("aria-busy") === "true";
+    rangeButtons.forEach(([key, button]) => {
+      button.disabled = busy || !fcData;
+      const range = presetRange(key);
+      button.setAttribute("aria-pressed", String(monthFrom.value === range[0] && monthTo.value === range[1]));
+    });
+    btnFullscreen.disabled = btnPrint.disabled = busy || !chartReady;
+    exportMenu.querySelector("summary").setAttribute("aria-disabled", String(busy || !chartReady));
+    exportButtons.forEach(([key, button]) => { button.disabled = busy || !chartReady || (key === "csv" && !tableRows.length); });
+  }
   function clearCharts() {
     if (window.Plotly) [chartDiv, scoreChartDiv, relativeChartDiv].forEach((d) => Plotly.purge(d));
     relativeTable.replaceChildren();
     tableDiv.replaceChildren(); tableRows = []; download.disabled = true;
+    chartReady = false; seriesInfo.hidden = true; exportMenu.open = false;
+    updateChartActions();
   }
   function validRange() {
     if (D.range(monthFrom, monthTo)) return true;
@@ -97,9 +119,68 @@
     return target;
   }
 
+  function shiftMonth(month, offset) {
+    const [year, m] = month.split("-").map(Number);
+    return new Date(Date.UTC(year, m - 1 + offset, 1)).toISOString().slice(0, 7);
+  }
+
+  function presetRange(key) {
+    if (key === "all") return [minMonth, maxMonth];
+    const anchor = (originDates[sliderIndex] || fcData?.origin_dates.at(-1) || minMonth).slice(0, 7);
+    const history = key === "1y" ? 12 : key === "5y" ? 60 : 6;
+    return [shiftMonth(anchor, -history), shiftMonth(anchor, maxHorizon)].map((m) => m < minMonth ? minMonth : m > maxMonth ? maxMonth : m);
+  }
+
+  function updateSeriesInfo() {
+    const transform = truthData[currentTarget]?.transform;
+    ROOT.querySelector("#fc-series-name").textContent = selTarget.selectedOptions[0].textContent;
+    ROOT.querySelector("#fc-series-units").textContent = transform === "log_diff" ? "Monthly · log change (Δlog)"
+      : transform === "diff" ? "Monthly · change in percentage points" : "Monthly · levels";
+    ROOT.querySelector("#fc-series-origin").textContent = originDates[sliderIndex] || "No origin in this period";
+    seriesInfo.hidden = false;
+  }
+
+  function syncFullscreen() {
+    expanded = document.fullscreenElement === chartFrame || chartFrame.classList.contains("fc-expanded");
+    btnFullscreen.textContent = expanded ? "Exit fullscreen" : "Fullscreen";
+    btnFullscreen.setAttribute("aria-pressed", String(expanded));
+    chartFrame.setAttribute("role", expanded ? "dialog" : "region");
+    chartFrame.setAttribute("aria-label", "Forecast chart and tools");
+    chartFrame.setAttribute("aria-modal", String(expanded));
+    draw();
+  }
+
+  async function toggleFullscreen() {
+    stopPlay(); exportMenu.open = false;
+    try {
+      if (document.fullscreenElement === chartFrame) await document.exitFullscreen();
+      else if (chartFrame.classList.contains("fc-expanded")) chartFrame.classList.toggle("fc-expanded", false);
+      else if (chartFrame.requestFullscreen) {
+        try { await chartFrame.requestFullscreen(); }
+        catch { chartFrame.classList.toggle("fc-expanded", true); }
+      }
+      else chartFrame.classList.toggle("fc-expanded", true);
+      syncFullscreen();
+      btnFullscreen.focus();
+    } catch { status.textContent = "Fullscreen could not open. You can still zoom or export the chart."; }
+  }
+
+  function downloadForecasts() {
+    D.download(["model", "target_end_date", "statistic", "value", "q005", "q010", "q050", "q090", "q095"], tableRows, `${currentTarget}-${originDates[sliderIndex]}.csv`);
+  }
+
+  async function exportChart(format, button) {
+    stopPlay(); exportMenu.open = false; button.disabled = true;
+    try {
+      await Plotly.downloadImage(chartDiv, { format, filename: `${currentTarget}-${originDates[sliderIndex] || "observed"}`, width: 1400, height: 700 });
+    } catch { status.textContent = "Chart export failed. Please try again."; }
+    finally { updateChartActions(); }
+  }
+
   function computeYRange() {
-    const fromMonth = monthFrom.value;
-    const toMonth = monthTo.value;
+    // Use the full history so moving the visible time window never changes scale.
+    const fromMonth = minMonth;
+    const toMonth = maxMonth;
 
     // Observed values: collected separately and NEVER clipped — the observed
     // line must always be fully visible, even when the selected model's
@@ -120,7 +201,7 @@
     if (fcData) {
       for (const model of Object.keys(fcData.models)) {
         if (!selectedModels.has(model)) continue;
-        for (const od of originDates) {
+        for (const od of fcData.origin_dates) {
           const e = fcData.models[model][od];
           if (!e) continue;
           for (const v of (e.q005 || []).slice(0, maxHorizon)) if (v != null) fcVals.push(v);
@@ -173,6 +254,7 @@
     [chartDiv, scoreChartDiv, relativeChartDiv].forEach((d) => d.classList.toggle("dash-chart--loading", on));
     [slider, btnPrev, btnNext, btnPlay].forEach((el) => { el.disabled = on || !originDates.length; });
     [btnShowModels, btnHideModels].forEach((el) => { el.disabled = on || !modelBox.querySelectorAll("input").length; });
+    updateChartActions();
   }
 
   function readHash() {
@@ -228,6 +310,32 @@
     btnNext.addEventListener("click", () => { stopPlay(); stepSlider(1); });
     if (btnPlay) btnPlay.addEventListener("click", togglePlay);
     if (btnResetZoom) btnResetZoom.addEventListener("click", resetZoom);
+    rangeButtons.forEach(([key, button]) => button.addEventListener("click", () => {
+      [monthFrom.value, monthTo.value] = presetRange(key);
+      onRangeChange();
+    }));
+    btnFullscreen.addEventListener("click", toggleFullscreen);
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    exportMenu.querySelector("summary").addEventListener("click", (e) => {
+      if (!chartReady || ROOT.getAttribute("aria-busy") === "true") e.preventDefault();
+    });
+    exportButtons.forEach(([key, button]) => button.addEventListener("click", () => {
+      if (key === "csv") { exportMenu.open = false; downloadForecasts(); }
+      else exportChart(key, button);
+    }));
+    btnPrint.addEventListener("click", () => { stopPlay(); exportMenu.open = false; window.print(); });
+    document.addEventListener("click", (e) => { if (!exportMenu.contains(e.target)) exportMenu.open = false; });
+    document.addEventListener("keydown", (e) => {
+      if (expanded && e.key === "Tab") {
+        const focusable = [...chartFrame.querySelectorAll('button:not(:disabled), summary, a[href]')].filter((el) => el.getClientRects().length);
+        const first = focusable[0], last = focusable.at(-1);
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+      if (e.key !== "Escape") return;
+      if (exportMenu.open) { exportMenu.open = false; exportMenu.querySelector("summary").focus(); }
+      else if (chartFrame.classList.contains("fc-expanded")) toggleFullscreen();
+    });
 
     ROOT.addEventListener("keydown", (e) => {
       if (e.target.closest("input, select, button, a, summary, textarea, [contenteditable]")) return;
@@ -243,7 +351,7 @@
 
     retry.addEventListener("click", onTargetChange);
     accuracy.addEventListener("toggle", () => { if (accuracy.open) { drawScoreChart(); } });
-    download.addEventListener("click", () => D.download(["model", "target_end_date", "statistic", "value", "q005", "q010", "q050", "q090", "q095"], tableRows, `${currentTarget}-${originDates[sliderIndex]}.csv`));
+    download.addEventListener("click", downloadForecasts);
     window.addEventListener("popstate", () => { readHash(); onTargetChange(); });
     readHash();
     await onTargetChange();
@@ -343,9 +451,9 @@
   }
 
   function onRangeChange() {
+    stopPlay();
     if (!validRange()) return;
     updateSlider();
-    yAxisRange = computeYRange();
     draw(); drawScoreChart();
   }
 
@@ -373,17 +481,16 @@
   }
 
   function syncMonthsFromPlotly(eventData) {
-    const yZoom = Number.isFinite(eventData["yaxis.range[0]"]) && Number.isFinite(eventData["yaxis.range[1]"]);
-    if (yZoom) yAxisRange = [eventData["yaxis.range[0]"], eventData["yaxis.range[1]"]];
-    if (eventData["yaxis.autorange"]) yAxisRange = computeYRange();
-    if (eventData["xaxis.range[0]"] && eventData["xaxis.range[1]"]) {
-      const newFrom = eventData["xaxis.range[0]"].slice(0, 7);
-      const newTo = eventData["xaxis.range[1]"].slice(0, 7);
+    const range = eventData["xaxis.range"] || [eventData["xaxis.range[0]"], eventData["xaxis.range[1]"]];
+    if (range[0] && range[1]) {
+      const start = new Date(range[0]), end = new Date(new Date(range[1]).getTime() - 1);
+      const newFrom = Number.isFinite(start.getTime()) ? start.toISOString().slice(0, 7) : "";
+      const newTo = Number.isFinite(end.getTime()) ? end.toISOString().slice(0, 7) : "";
       if (D.validMonth(newFrom) && D.validMonth(newTo)) {
-        monthFrom.value = newFrom < minMonth ? minMonth : newFrom;
-        monthTo.value = newTo > maxMonth ? maxMonth : newTo;
+        stopPlay();
+        monthFrom.value = newFrom < minMonth ? minMonth : newFrom > maxMonth ? maxMonth : newFrom;
+        monthTo.value = newTo > maxMonth ? maxMonth : newTo < minMonth ? minMonth : newTo;
         updateSlider();
-        if (!yZoom) yAxisRange = computeYRange();
         draw(); drawScoreChart();
       }
     }
@@ -391,7 +498,6 @@
       monthFrom.value = minMonth;
       monthTo.value = maxMonth;
       updateSlider();
-      if (!yZoom) yAxisRange = computeYRange();
       draw(); drawScoreChart();
     }
   }
@@ -400,21 +506,29 @@
   function draw() {
     if (!fcData || !window.Plotly || !validRange()) return;
     writeHash(); updateSliderLabel();
-    if (!originDates.length) { clearCharts(); status.textContent = "No forecasts for the selected models in this range. Select another model or widen the dates."; return; }
-    status.textContent = selectedModels.size ? "" : "Select a model to show its forecast.";
+    status.textContent = !originDates.length ? "No forecasts for the selected models in this range. Select another model or widen the dates."
+      : selectedModels.size ? "" : "Select a model to show its forecast.";
     renderTable();
-    if (selectedModels.size && !tableRows.length) status.textContent = "No forecasts for these models at this origin. Choose another origin or model.";
+    if (originDates.length && selectedModels.size && !tableRows.length) status.textContent = "No forecasts for these models at this origin. Choose another origin or model.";
+    updateSeriesInfo();
 
     const originDate = originDates[sliderIndex];
     ROOT.querySelector("#fc-description").textContent = `${selTarget.selectedOptions[0].textContent}. Origin ${originDate}; up to ${maxHorizon} monthly steps. Units: ${yAxisLabel(currentTarget)}. Exact values and intervals are in the table below.`;
     const fromMonth = monthFrom.value;
     const toMonth = monthTo.value;
-    const traces = [];
+    // Filled traces also appear in Plotly's mini timeline; layout shapes do not.
+    const [low, high] = yAxisRange || [0, 1];
+    const traces = D.crisisShapes(isDark()).map(({ x0, x1, fillcolor }) => ({
+      x: [x0, x1, x1, x0], y: [low, low, high, high],
+      mode: "lines", line: { width: 0 }, fill: "toself", fillcolor,
+      showlegend: false, hoverinfo: "skip",
+    }));
 
     const t = truthData[currentTarget];
     if (t) {
-      const endLimit = new Date(D.nextMonth(toMonth));
-      const startLimit = new Date(`${fromMonth}-01`);
+      // Keep the full observed history available in the timeline navigator.
+      const endLimit = new Date(D.nextMonth(maxMonth));
+      const startLimit = new Date(`${minMonth}-01`);
       const xArr = [], yArr = [];
       const displayVals = truthDisplayValues(t);
       t.dates.forEach((d, i) => {
@@ -472,16 +586,17 @@
     const titleColor = dark ? "#ddd" : "#333";
     const spikeColor = dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)";
 
-    const shapes = [...D.crisisShapes(dark), {
+    const shapes = originDate ? [{
       type: "line", x0: originDate, x1: originDate,
       y0: 0, y1: 1, yref: "paper",
       line: { color: originLineColor, width: 1.5, dash: "dash" },
-    }];
-    const annotations = [{
+    }] : [];
+    const annotations = originDate ? [{
       x: originDate, y: 1, yref: "paper",
       text: "forecast origin", showarrow: false,
       font: { size: 10, color: originTextColor }, yanchor: "bottom",
-    }];
+    }] : [];
+    const narrow = chartDiv.clientWidth < 500;
 
     const layout = {
       font: plotlyFont(),
@@ -489,22 +604,27 @@
       xaxis: {
         range: [`${fromMonth}-01`, D.nextMonth(toMonth)],
         ...D.timeAxis(dark, currentTarget),
+        dtick: `M${Math.ceil((+toMonth.slice(0, 4) - +fromMonth.slice(0, 4) + 1) * 12 / (narrow ? 4 : 8))}`,
+        tickformat: +toMonth.slice(0, 4) - +fromMonth.slice(0, 4) < 4 ? "%b %Y" : "%Y",
+        rangeslider: { visible: true, range: [`${minMonth}-01`, D.nextMonth(maxMonth)], thickness: .12,
+          bgcolor: dark ? "#222a2d" : "#f5f7f7", bordercolor: dark ? "#455054" : "#dce3e2", borderwidth: 1 },
         spikecolor: spikeColor, spikethickness: 1,
       },
       yaxis: {
         title: { text: yAxisLabel(currentTarget), standoff: 10 },
-        range: yAxisRange, ...plotlyGrid(),
+        range: yAxisRange, fixedrange: true, ...plotlyGrid(),
       },
       shapes, annotations,
-      legend: { orientation: "h", y: -0.12, x: 0.5, xanchor: "center",
+      legend: { orientation: "h", y: 1.02, x: 1, xanchor: "right", yanchor: "bottom",
                 font: { size: 13 }, bgcolor: "rgba(0,0,0,0)" },
-      margin: { t: 40, r: 16, b: 60, l: chartDiv.clientWidth < 500 ? 48 : 65 },
+      margin: { t: narrow ? 90 : 60, r: 16, b: 40, l: narrow ? 48 : 65 },
       hovermode: "x unified", hoverlabel: D.hoverLabel(dark),
-      height: chartDiv.clientWidth < 500 ? 420 : 500,
-      plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: "rgba(0,0,0,0)",
+      height: expanded ? Math.max(420, window.innerHeight - 280) : narrow ? 480 : 560,
+      plot_bgcolor: "rgba(0,0,0,0)", paper_bgcolor: isDark() ? "#1e2129" : "#fff",
     };
 
     Plotly.react(chartDiv, D.alignHover(traces), layout, PLOTLY_CONFIG);
+    chartReady = true; updateChartActions();
     chartDiv.removeAllListeners && chartDiv.removeAllListeners("plotly_relayout");
     chartDiv.removeAllListeners && chartDiv.removeAllListeners("plotly_click");
     chartDiv.on("plotly_relayout", syncMonthsFromPlotly);
