@@ -1,6 +1,6 @@
 # Foundation benchmarks
 
-The hub includes a runner for [FoundationForecast](https://github.com/TimeCopilot/foundationforecast)
+The hub's BASELINE team runs [FoundationForecast](https://github.com/TimeCopilot/foundationforecast)
 with these fixed model versions:
 
 | Model | Checkpoint | Submitted outputs |
@@ -47,31 +47,15 @@ by the wrapper. This affects its interval coverage and quantile loss.
 Historical runs use revised observations and may overlap the models' pretraining
 data. Treat them as retrospective comparisons, not prospective performance.
 
-## Run locally
+## How they are run
 
-Use a separate Python 3.11 environment with sufficient space for PyTorch,
-FoundationForecast's dependencies, and downloaded model weights. A CUDA GPU
-speeds up inference; the wrapper also supports CPU execution.
-
-```bash
-python3.11 -m venv .venv-foundation
-.venv-foundation/bin/python -m pip install -r requirements-foundation.txt
-.venv-foundation/bin/python target-data/fetch_fred_md.py --panel-only
-.venv-foundation/bin/python -m src.models.foundation --origin 2026-04-15
-```
-
-To backfill monthly origins, or run just one model:
-
-```bash
-.venv-foundation/bin/python -m src.models.foundation --models Chronos --start 2000-01-17 --end 2026-03-17
-```
-
-Full-panel forecasts are retained in `model-panel-output/BASELINE-{model}/`.
-Resume reuses these validated panel files and rebuilds the hub target subset;
-old target-only files without panel forecasts are regenerated. Use `--overwrite`
-to rerun inference after an input correction. Invalid input,
-missing forecast months, non-finite values, and crossing quantiles stop the run
-before that file is saved. No substitute model is used on failure.
+The runner lives in the separate `MacroHub_models` repository, together with
+BASELINE-ARMA_BIC. Each month on the 17th it reads this hub's target data,
+forecasts the new origin, and submits the files by pull request through the same
+validation as any other team. Full-panel forecasts are retained in
+`model-panel-output/BASELINE-{model}/`. Invalid input, missing forecast months,
+non-finite values, and crossing quantiles stop the run before a file is saved.
+No substitute model is used on failure.
 
 Outputs go to `model-output/BASELINE-{model}/`. After generating forecasts,
 refresh the scores and website data in the usual hub environment:
@@ -84,9 +68,3 @@ mkdocs build --strict
 
 Models appear in the dashboards once their forecast files and dashboard data
 have been generated; adding metadata alone does not create benchmark results.
-
-Check grouping and missing-value masks without downloading weights:
-
-```bash
-PYTHONPATH=. .venv-foundation/bin/python tests/panel_inference.py
-```

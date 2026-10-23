@@ -54,3 +54,8 @@ with tempfile.TemporaryDirectory() as tmp, \
         assert output.origin_date.eq(path.name[:10]).all()
         np.testing.assert_allclose(output.value, .02)
 print('Ensemble checks passed: filenames match every forecast origin.')
+
+from src.generate_dashboard_data import _json_values
+# Dashboard export keeps tiny changes and turns NaN into JSON null.
+assert _json_values([1e-12, None, np.nan]) == [1e-12, None, None]
+print('Export checks passed: precision and missing values.')

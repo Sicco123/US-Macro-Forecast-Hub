@@ -63,6 +63,20 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 FRED_MD_PAGE = "https://www.stlouisfed.org/research/economists/mccracken/fred-databases"
 
 
+def load_fred_panel(path):
+    """Read the official wide CSV, including its transformation-code row."""
+    panel = pd.read_csv(path)
+    if panel.columns[0] != "sasdate" or panel.iloc[0, 0] != "Transform:":
+        raise ValueError("Expected an official FRED-MD CSV with a Transform: row")
+    codes = pd.to_numeric(panel.iloc[0, 1:], errors="raise")
+    if not codes.isin(range(1, 8)).all():
+        raise ValueError("Invalid FRED-MD transformation codes")
+    levels = panel.iloc[1:].copy()
+    levels["truth_date"] = pd.to_datetime(levels.pop("sasdate"), format="%m/%d/%Y") + pd.offsets.MonthEnd(0)
+    truth = levels.melt(id_vars="truth_date", var_name="target", value_name="value")
+    return truth, codes.astype(int).to_dict()
+
+
 def fetch_fred_panel(output_dir: Path):
     """Download the full current vintage, with the original transformation row."""
     # The old static current.csv URL can serve a stale vintage; follow the published link.
@@ -78,7 +92,6 @@ def fetch_fred_panel(output_dir: Path):
     path = output_dir / "latest-fred-md.csv"
     temporary = path.with_suffix(".csv.tmp")
     temporary.write_bytes(data)
-    from src.models.foundation import load_fred_panel
     truth, codes = load_fred_panel(temporary)
     temporary.replace(path)
     print(f"Saved full FRED-MD panel: {len(codes)} variables through {truth.truth_date.max():%Y-%m} ({url})")
@@ -231,9 +244,6 @@ def main():
     parser.add_argument("--panel-only", action="store_true", help="Download the full FRED-MD panel without the FRED API")
     args = parser.parse_args()
 
-    # Make imports from the hub available when this file is executed directly.
-    import sys
-    sys.path.insert(0, str(SCRIPT_DIR.parent))
     output_dir = Path(args.output_dir)
     fetch_fred_panel(output_dir)
     if args.panel_only:
