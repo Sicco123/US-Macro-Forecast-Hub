@@ -161,9 +161,9 @@ mkdocs serve
 |----------|---------|-------------|
 | `validate_submission` | PR to `model-output/` | Validates forecast format and metadata |
 | `update_target_data` | 10th monthly | Fetches latest FRED-MD data |
-| `generate_baseline` | After data update | Produces baseline & ensemble forecasts |
-| `scoring` | After data update | Evaluates all forecasts against realized values |
-| `deploy_website` | Push to `docs/` | Builds and deploys the GitHub Pages site |
+| `generate_baseline` | 17th monthly (origin) | Produces the RandomWalk baseline forecast |
+| `monthly_round` | 18th monthly | Ensemble of the 17th's submissions, scores, dashboard data, then deploys |
+| `deploy_website` | Push to `docs/`, or `monthly_round` | Builds and deploys the GitHub Pages site |
 
 ---
 

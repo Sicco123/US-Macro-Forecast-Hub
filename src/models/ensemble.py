@@ -1,14 +1,18 @@
 """
-Generate the hub ensemble forecast by combining all submitted model forecasts.
+Generate the hub ensemble forecast for one forecast origin.
 
 The ensemble uses an equal-weight median aggregation: for each target, horizon,
 location, and quantile level, the ensemble value is the median across all
-contributing models.
+models that submitted a forecast for that origin.
+
+Run after the submission window closes (the monthly workflow runs it on the 18th
+for the 17th): `python src/models/ensemble.py [--origin YYYY-MM-DD]`.
 """
 
+import argparse
+from datetime import date
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
@@ -18,95 +22,48 @@ ENSEMBLE_DIR = HUB_ROOT / "model-output" / "MacroHub-Ensemble"
 # Minimum number of models required to form an ensemble
 MIN_MODELS = 2
 
+GROUP_COLS = ["origin_date", "target", "target_end_date", "horizon",
+              "location", "output_type", "output_type_id"]
 
-def load_latest_forecasts() -> pd.DataFrame:
+
+def load_origin_forecasts(origin: str) -> pd.DataFrame:
+    """Every model's file for this origin; a model's older files never stand in."""
+    dfs = [pd.read_csv(path).assign(_model=path.parent.name)
+           for path in sorted(MODEL_OUTPUT_DIR.glob(f"*/{origin}-*.csv"))
+           if path.parent.name != ENSEMBLE_DIR.name]
+    return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+
+
+def generate_ensemble(forecasts: pd.DataFrame) -> pd.DataFrame:
+    """Median per group over at least MIN_MODELS models.
+
+    Mean rows (empty output_type_id) drop out of the grouping, so the ensemble
+    submits quantiles only and is scored on its median.
     """
-    Load the most recent forecast file from each model directory.
-    Excludes the ensemble itself.
-    """
-    all_dfs = []
-
-    for model_dir in MODEL_OUTPUT_DIR.iterdir():
-        if not model_dir.is_dir() or model_dir.name.startswith("."):
-            continue
-        if model_dir.name == "MacroHub-Ensemble":
-            continue
-
-        csv_files = sorted(model_dir.glob("*.csv"))
-        if not csv_files:
-            continue
-
-        # Use the most recent file
-        latest_file = csv_files[-1]
-        try:
-            df = pd.read_csv(latest_file)
-            parts = model_dir.name.split("-", 1)
-            if len(parts) == 2:
-                df["_team"] = parts[0]
-                df["_model"] = parts[1]
-                all_dfs.append(df)
-        except Exception as e:
-            print(f"Warning: could not read {latest_file}: {e}")
-
-    if not all_dfs:
-        return pd.DataFrame()
-    return pd.concat(all_dfs, ignore_index=True)
+    if forecasts.empty:
+        return forecasts
+    agg = forecasts.groupby(GROUP_COLS).agg(
+        value=("value", "median"), n=("_model", "nunique")).reset_index()
+    return agg.loc[agg.n >= MIN_MODELS].drop(columns="n")
 
 
-def generate_ensemble(forecasts_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Compute the median ensemble across models for each group.
-    """
-    if forecasts_df.empty:
-        return pd.DataFrame()
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--origin", default=date.today().replace(day=17).isoformat(),
+                        help="Forecast origin (default: the 17th of this month)")
+    origin = parser.parse_args(argv).origin
 
-    group_cols = [
-        "origin_date", "target", "target_end_date", "horizon",
-        "location", "output_type", "output_type_id",
-    ]
-
-    # Only include groups with enough contributing models
-    ensemble_records = []
-
-    for group_key, group_df in forecasts_df.groupby(group_cols):
-        n_models = group_df["_model"].nunique()
-        if n_models < MIN_MODELS:
-            continue
-
-        ensemble_value = group_df["value"].astype(float).median()
-
-        record = dict(zip(group_cols, group_key))
-        record["value"] = float(ensemble_value)
-        ensemble_records.append(record)
-
-    return pd.DataFrame(ensemble_records)
-
-
-def main():
-    forecasts_df = load_latest_forecasts()
-
-    if forecasts_df.empty:
-        print("No model forecasts found.")
-        return
-
-    n_models = forecasts_df[["_team", "_model"]].drop_duplicates().shape[0]
-    print(f"Found forecasts from {n_models} model(s).")
-
-    if n_models < MIN_MODELS:
-        print(f"Need at least {MIN_MODELS} models for ensemble. Skipping.")
-        return
-
-    ensemble_df = generate_ensemble(forecasts_df)
-
+    forecasts = load_origin_forecasts(origin)
+    ensemble_df = generate_ensemble(forecasts)
     if ensemble_df.empty:
-        print("No ensemble forecasts generated.")
+        print(f"No ensemble for {origin}: fewer than {MIN_MODELS} models submitted.")
         return
 
     ENSEMBLE_DIR.mkdir(parents=True, exist_ok=True)
-    for origin, forecasts in ensemble_df.groupby("origin_date"):
-        output_path = ENSEMBLE_DIR / f"{origin}-MacroHub-Ensemble.csv"
-        forecasts.to_csv(output_path, index=False)
-        print(f"Saved {len(forecasts)} ensemble rows to {output_path}")
+    output_path = ENSEMBLE_DIR / f"{origin}-MacroHub-Ensemble.csv"
+    ensemble_df.to_csv(output_path, index=False)
+    print(f"Saved {len(ensemble_df)} ensemble rows from "
+          f"{forecasts._model.nunique()} models to {output_path}")
 
 
 if __name__ == "__main__":

@@ -25,8 +25,10 @@ import numpy as np
 import pandas as pd
 try:
     from .baseline import monthly_levels
+    from .ensemble import generate_ensemble, load_origin_forecasts
 except ImportError:  # Direct script execution.
     from baseline import monthly_levels
+    from ensemble import generate_ensemble, load_origin_forecasts
 
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
@@ -184,35 +186,8 @@ def process_origin(series_dict, origin, rw_dir):
 
 # ── Ensemble ────────────────────────────────────────────────────────────────
 
-def generate_ensemble(origin_str):
-    dfs = []
-    for d in MODEL_OUTPUT_DIR.iterdir():
-        if not d.is_dir() or d.name.startswith(".") or d.name == "MacroHub-Ensemble":
-            continue
-        for f in d.glob(f"{origin_str}-*.csv"):
-            try:
-                df = pd.read_csv(f)
-                df["_model"] = d.name
-                dfs.append(df)
-            except Exception:
-                pass
-    if not dfs:
-        return None
-
-    combined = pd.concat(dfs, ignore_index=True)
-    gcols = ["origin_date", "target", "target_end_date", "horizon",
-             "location", "output_type", "output_type_id"]
-
-    agg = combined.groupby(gcols).agg(
-        value=("value", "median"),
-        n=("_model", "nunique"),
-    ).reset_index()
-    agg = agg[agg["n"] >= 2].drop(columns="n")
-    return agg if len(agg) > 0 else None
-
-
 def save_df(df, out_dir, origin_str, model_name):
-    if df is not None:
+    if not df.empty:
         df.to_csv(out_dir / f"{origin_str}-{model_name}.csv", index=False)
 
 
@@ -243,7 +218,7 @@ def main():
     for idx, origin in enumerate(ORIGIN_DATES):
         ds = origin.strftime("%Y-%m-%d")
         print(f"\r  Ensemble [{idx+1}/{total}] {ds}", end="", flush=True)
-        save_df(generate_ensemble(ds), ens_dir, ds, "MacroHub-Ensemble")
+        save_df(generate_ensemble(load_origin_forecasts(ds)), ens_dir, ds, "MacroHub-Ensemble")
 
     print("\nDone!")
 

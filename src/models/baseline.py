@@ -17,6 +17,7 @@ Comparison space (forecasts and truth evaluated in same transformed scale):
 This serves as the standard benchmark for evaluating all other models.
 """
 
+import argparse
 from datetime import datetime
 from pathlib import Path
 
@@ -197,8 +198,11 @@ def main():
         print(f"Target data not found at {TARGET_DATA_PATH}. Run fetch_fred_md.py first.")
         return
 
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--origin", default=datetime.now().strftime("%Y-%m-%d"),
+                        help="Forecast origin (default: today; the workflow runs on the 17th)")
+    today = parser.parse_args().origin
     target_df = load_target_data()
-    today = datetime.now().strftime("%Y-%m-%d")
 
     print(f"Generating baseline forecast for origin_date={today}")
     records = generate_baseline_forecast(target_df, today)

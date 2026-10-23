@@ -1,0 +1,64 @@
+name: Monthly Round
+
+on:
+  # The day after the 17th's submission window (06:00 UTC = 01:00-02:00 US/Eastern
+  # on the 18th): combine all submissions, score, and publish.
+  schedule:
+    - cron: '0 6 18 * *'
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: 'Forecast origin (default: the 17th of this month)'
+        required: false
+
+concurrency:
+  group: commit-to-main
+  cancel-in-progress: false
+
+jobs:
+  round:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write  # start the website deploy
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install pandas numpy pyyaml
+
+      - name: Generate ensemble forecast
+        run: python src/models/ensemble.py ${{ inputs.origin && format('--origin {0}', inputs.origin) || '' }}
+
+      - name: Score all forecasts
+        run: python src/scoring/score_forecasts.py
+
+      - name: Generate dashboard data
+        run: python src/generate_dashboard_data.py
+
+      - name: Commit and push
+        id: commit
+        run: |
+          git add model-output/MacroHub-Ensemble/ model-evaluation/ docs/data/
+          if git diff --cached --quiet; then echo "No changes."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Monthly round: ensemble, scores and dashboard data $(date +%Y-%m-%d)"
+          git pull --rebase
+          git push
+          echo "pushed=true" >> $GITHUB_OUTPUT
+
+      # Pushes made with GITHUB_TOKEN do not trigger other workflows; dispatch does.
+      - name: Deploy website
+        if: steps.commit.outputs.pushed == 'true'
+        run: gh workflow run deploy_website.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
