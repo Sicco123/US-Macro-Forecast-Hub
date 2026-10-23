@@ -34,7 +34,7 @@ window are automatically rejected by CI.
 | **Registration window opens** | 17th of each month, 00:00 US/Eastern |
 | **Registration window closes** | 17th of each month, 23:59 US/Eastern |
 | **Target data updated** | ~10th of each month (FRED-MD release) |
-| **Scores published** | After target data is available |
+| **Ensemble, scores and website updated** | 18th of each month |
 
 ---
 

@@ -135,8 +135,9 @@ periods are December 2007–June 2009 and March 2020–June 2021.
 
 ## Evaluation schedule
 
-Forecasts are scored once FRED-MD releases the target month (~10th of the
-following month). The current scoring script uses `latest-target_values.csv`, so it evaluates
+Scores are refreshed on the 18th of each month, after the submission window,
+so a target month is scored in the round after FRED-MD releases it (~10th of
+the following month). The current scoring script uses `latest-target_values.csv`, so it evaluates
 against the latest downloaded vintage. Historical backfills and revised truth
 are included; these results do not establish first-release, real-time performance.
 

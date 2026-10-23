@@ -1,16 +1,20 @@
 name: Generate Baseline Forecast
 
 on:
-  # Run after target data is updated
-  workflow_run:
-    workflows: ["Update Target Data"]
-    types: [completed]
+  # The 17th is the monthly forecast origin; 06:00 UTC is 01:00-02:00 US/Eastern,
+  # inside the submission window.
+  schedule:
+    - cron: '0 6 17 * *'
   workflow_dispatch:
+
+# Every workflow that commits to main shares this group, so their pushes queue.
+concurrency:
+  group: commit-to-main
+  cancel-in-progress: false
 
 jobs:
   baseline:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: write
 
@@ -30,23 +34,12 @@ jobs:
       - name: Generate baseline forecast
         run: python src/models/baseline.py
 
-      - name: Generate ensemble forecast
-        run: python src/models/ensemble.py
-
-      - name: Check for changes
-        id: check
-        run: |
-          if git diff --quiet model-output/; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
-
       - name: Commit and push forecasts
-        if: steps.check.outputs.changed == 'true'
         run: |
+          git add model-output/MacroHub-RandomWalk/
+          if git diff --cached --quiet; then echo "No changes."; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add model-output/
-          git commit -m "Generate baseline and ensemble forecasts $(date +%Y-%m-%d)"
+          git commit -m "Generate RandomWalk baseline forecast $(date +%Y-%m-%d)"
+          git pull --rebase
           git push

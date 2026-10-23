@@ -97,7 +97,7 @@ Macro-Forecast-Hub/
 ├── src/                         # Source code
 │   ├── validation/              #   Submission validation scripts
 │   ├── scoring/                 #   Forecast evaluation
-│   └── models/                  #   Baseline and ensemble generators
+│   └── models/                  #   Random walk and ensemble generators
 ├── docs/                        # Website (mkdocs-material)
 ├── .github/workflows/           # CI/CD automation
 └── mkdocs.yml                   # Website configuration
@@ -161,9 +161,9 @@ mkdocs serve
 |----------|---------|-------------|
 | `validate_submission` | PR to `model-output/` | Validates forecast format and metadata |
 | `update_target_data` | 10th monthly | Fetches latest FRED-MD data |
-| `generate_baseline` | After data update | Produces baseline & ensemble forecasts |
-| `scoring` | After data update | Evaluates all forecasts against realized values |
-| `deploy_website` | Push to `docs/` | Builds and deploys the GitHub Pages site |
+| `generate_baseline` | 17th monthly (origin) | Produces the RandomWalk baseline forecast |
+| `monthly_round` | 18th monthly | Ensemble of the 17th's submissions, scores, dashboard data, then deploys |
+| `deploy_website` | Push to `docs/`, or `monthly_round` | Builds and deploys the GitHub Pages site |
 
 ---
 
@@ -193,18 +193,10 @@ viewport, screen-reader, and browser rendering still require a browser check.
 
 ## Foundation benchmarks
 
-Chronos-2, TimesFM 2.5, and Toto 1.0 use the optional
-[FoundationForecast runner](docs/about/benchmarks.md). Install
-`requirements-foundation.txt` in a separate Python 3.11 environment, then run:
-
-```bash
-python target-data/fetch_fred_md.py --panel-only
-python -m src.models.foundation --origin 2026-04-15
-# Or resume monthly historical forecasts for selected models:
-python -m src.models.foundation --models Chronos TimesFM Toto --start 2000-01-17 --end 2026-03-17
-```
-
-Outputs use the existing `BASELINE-{model}` submission format. Re-run scoring
+Chronos-2, TimesFM 2.5, Toto 1.0 ([details](docs/about/benchmarks.md)) and
+ARMA_BIC are run from the separate `MacroHub_models` repository, which reads this
+hub's target data and submits `BASELINE-{model}` forecasts by pull request on the
+17th of each month, like any other team. Re-run scoring
 and `src/generate_dashboard_data.py` to include them in the website. Historical
 runs use revised truth and may overlap model pretraining. Chronos and Toto
 submit quantiles only because the wrapper's point forecasts are medians.
@@ -220,11 +212,9 @@ monthly backfills and April 15, 2026. All three are included in the refreshed
 ensemble, scores, and dashboard data. These results replace the earlier
 target-only foundation-model forecasts.
 
-Adapter checks without model downloads:
+Hub checks (model adapter tests live in `MacroHub_models`):
 
 ```bash
-PYTHONPATH=. python tests/foundation.py
-PYTHONPATH=. .venv-foundation/bin/python tests/panel_inference.py
 PYTHONPATH=. python tests/scoring.py
 node tests/dashboard.cjs
 ```

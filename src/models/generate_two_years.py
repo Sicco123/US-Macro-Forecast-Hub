@@ -4,8 +4,10 @@ Each origin date produces 24-month-ahead forecasts (horizons 0--23).
 
 Models:
   - MacroHub-RandomWalk   (all 12 targets)
-  - BASELINE-ARMA_BIC     (INDPRO, CPIAUCSL, PCEPI, UNRATE)
   - MacroHub-Ensemble     (median across models per target)
+
+BASELINE-ARMA_BIC and the foundation-model backfills live in the MacroHub_models
+repository; run them there before the ensemble phase.
 
 Comparison space (forecasts and truth evaluated in same transformed scale):
   INDPRO   → Δlog(x)   monthly log difference
@@ -14,11 +16,7 @@ Comparison space (forecasts and truth evaluated in same transformed scale):
   UNRATE   → Δx        monthly first difference
   all others → level (unchanged)
 
-Speed:
-  - ARMA on rolling 10-year (120 obs) window, re-selected every month
-  - Converged, stationary state-space MLE fits for BIC selection and forecasts
-  - Vectorised quantile generation via scipy broadcasting
-  - Single process (no multiprocessing, safe on 16 GB machines)
+Single process (no multiprocessing, safe on 16 GB machines).
 """
 
 from pathlib import Path
@@ -26,11 +24,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 try:
-    from .arma_bic import generate_forecasts
     from .baseline import monthly_levels
+    from .ensemble import generate_ensemble, load_origin_forecasts
 except ImportError:  # Direct script execution.
-    from arma_bic import generate_forecasts
     from baseline import monthly_levels
+    from ensemble import generate_ensemble, load_origin_forecasts
 
 
 HUB_ROOT = Path(__file__).resolve().parents[2]
@@ -42,7 +40,6 @@ ALL_TARGETS = [
     "FEDFUNDS", "GS10", "TB3MS", "HOUST", "M2SL",
     "DPCERA3M086SBEA", "RETAILx",
 ]
-ARMA_TARGETS = ["INDPRO", "CPIAUCSL", "PCEPI", "UNRATE"]
 
 QUANTILES = np.array([0.05, 0.1, 0.5, 0.9, 0.95])
 N_Q = len(QUANTILES)
@@ -172,18 +169,10 @@ LOG_DIFF_TARGETS = {"INDPRO", "CPIAUCSL", "PCEPI"}
 DIFF_TARGETS = {"UNRATE"}
 
 
-def generate_arma(series_dict, origin_str, targets):
-    target_df = pd.concat([
-        pd.DataFrame({"target": target, "truth_date": series_dict[target][0], "value": series_dict[target][1]})
-        for target in targets
-    ], ignore_index=True)
-    return generate_forecasts(target_df, origin_str)
-
-
 # ── Process one origin date ────────────────────────────────────────────────
 
-def process_origin(series_dict, origin, rw_dir, bl_dir):
-    """Process a single origin date: RW + ARMA, save CSVs."""
+def process_origin(series_dict, origin, rw_dir):
+    """Process a single origin date: RW, save CSV."""
     ds = origin.strftime("%Y-%m-%d")
 
     # Random Walk (all 12 targets)
@@ -192,46 +181,13 @@ def process_origin(series_dict, origin, rw_dir, bl_dir):
         pd.DataFrame(rw_rows, columns=COLUMNS).to_csv(
             rw_dir / f"{ds}-MacroHub-RandomWalk.csv", index=False)
 
-    # ARMA (4 targets)
-    arma_rows = generate_arma(series_dict, ds, ARMA_TARGETS)
-    if arma_rows:
-        df = pd.DataFrame(arma_rows, columns=COLUMNS)
-        df.to_csv(bl_dir / f"{ds}-BASELINE-ARMA_BIC.csv", index=False)
-
     return ds
 
 
 # ── Ensemble ────────────────────────────────────────────────────────────────
 
-def generate_ensemble(origin_str):
-    dfs = []
-    for d in MODEL_OUTPUT_DIR.iterdir():
-        if not d.is_dir() or d.name.startswith(".") or d.name == "MacroHub-Ensemble":
-            continue
-        for f in d.glob(f"{origin_str}-*.csv"):
-            try:
-                df = pd.read_csv(f)
-                df["_model"] = d.name
-                dfs.append(df)
-            except Exception:
-                pass
-    if not dfs:
-        return None
-
-    combined = pd.concat(dfs, ignore_index=True)
-    gcols = ["origin_date", "target", "target_end_date", "horizon",
-             "location", "output_type", "output_type_id"]
-
-    agg = combined.groupby(gcols).agg(
-        value=("value", "median"),
-        n=("_model", "nunique"),
-    ).reset_index()
-    agg = agg[agg["n"] >= 2].drop(columns="n")
-    return agg if len(agg) > 0 else None
-
-
 def save_df(df, out_dir, origin_str, model_name):
-    if df is not None:
+    if not df.empty:
         df.to_csv(out_dir / f"{origin_str}-{model_name}.csv", index=False)
 
 
@@ -243,19 +199,18 @@ def main():
     series_dict = prepare_target_series(target_df)
 
     rw_dir = MODEL_OUTPUT_DIR / "MacroHub-RandomWalk"
-    bl_dir = MODEL_OUTPUT_DIR / "BASELINE-ARMA_BIC"
     ens_dir = MODEL_OUTPUT_DIR / "MacroHub-Ensemble"
 
     # Create output directories upfront
-    for d in [rw_dir, bl_dir, ens_dir]:
+    for d in [rw_dir, ens_dir]:
         d.mkdir(parents=True, exist_ok=True)
 
     total = len(ORIGIN_DATES)
     print(f"Phase 1: Generating {total} origin dates × 24-month horizons (single process)...")
 
-    # Phase 1: RW + ARMA sequentially
+    # Phase 1: RW sequentially
     for idx, origin in enumerate(ORIGIN_DATES):
-        ds = process_origin(series_dict, origin, rw_dir, bl_dir)
+        ds = process_origin(series_dict, origin, rw_dir)
         print(f"\r  [{idx+1}/{total}] {ds}", end="", flush=True)
 
     # Phase 2: Ensemble (reads files written in phase 1)
@@ -263,7 +218,7 @@ def main():
     for idx, origin in enumerate(ORIGIN_DATES):
         ds = origin.strftime("%Y-%m-%d")
         print(f"\r  Ensemble [{idx+1}/{total}] {ds}", end="", flush=True)
-        save_df(generate_ensemble(ds), ens_dir, ds, "MacroHub-Ensemble")
+        save_df(generate_ensemble(load_origin_forecasts(ds)), ens_dir, ds, "MacroHub-Ensemble")
 
     print("\nDone!")
 
